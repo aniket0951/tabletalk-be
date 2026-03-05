@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String       @id
+  name         String
+  email        String
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  isDeleted    Boolean      @default(false)
+  restaurants  Restaurant[]
+}
+
+model Restaurant {
+  id             String         @id @default(cuid())
+  name           String
+  phone          String
+  city           String         @default("")
+  upiId          String         @default("")
+  serviceMode    ServiceMode    @default(DINE_IN)
+  restaurantCode String?         @unique
+  userId         String
+  user           User           @relation(fields: [userId], references: [id])
+  subscription   Subscription?
+  categories     MenuCategory[]
+  tables         DiningTable[]
+  orders         Order[]
+  staff          Staff[]
+  customers      Customer[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  isDeleted      Boolean        @default(false)
+}
+
+model Subscription {
+  id           String             @id @default(cuid())
+  plan         PlanType           @default(GROWTH)
+  status       SubscriptionStatus @default(TRIAL)
+  startDate    DateTime           @default(now())
+  endDate      DateTime
+  restaurantId String             @unique
+  restaurant   Restaurant         @relation(fields: [restaurantId], references: [id])
+  invoices     Invoice[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  isDeleted    Boolean            @default(false)
+}
+
+model MenuCategory {
+  id           String     @id @default(cuid())
+  name         String
+  emoji        String     @default("")
+  sortOrder    Int        @default(0)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  items        MenuItem[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  isDeleted    Boolean    @default(false)
+}
+
+model MenuItem {
+  id           String       @id @default(cuid())
+  name         String
+  description  String       @default("")
+  price        Float
+  type         MenuItemType @default(VEG)
+  available    Boolean      @default(true)
+  categoryId   String
+  category     MenuCategory @relation(fields: [categoryId], references: [id])
+  restaurantId String       @default("")
+  orderItems   OrderItem[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  isDeleted    Boolean      @default(false)
+}
+
+model DiningTable {
+  id           String      @id @default(cuid())
+  tableNumber  Int
+  label        String
+  capacity     Int         @default(4)
+  active       Boolean     @default(true)
+  status       TableStatus @default(FREE)
+  restaurantId String
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id])
+  orders       Order[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  isDeleted    Boolean     @default(false)
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  orderCode     String
+  tableId       String
+  table         DiningTable @relation(fields: [tableId], references: [id])
+  restaurantId  String
+  restaurant    Restaurant  @relation(fields: [restaurantId], references: [id])
+  staffId       String?
+  staff         Staff?      @relation(fields: [staffId], references: [id])
+  customerPhone String      @default("")
+  customerName  String      @default("")
+  customerId    String?
+  customer      Customer?   @relation(fields: [customerId], references: [id])
+  status        OrderStatus @default(NEW)
+  specialNote   String      @default("")
+  subtotal      Float       @default(0)
+  tax           Float       @default(0)
+  total         Float       @default(0)
+  placedAt      DateTime    @default(now())
+  confirmedAt   DateTime?
+  cookingAt     DateTime?
+  readyAt       DateTime?
+  billedAt      DateTime?
+  settledAt     DateTime?
+  items         OrderItem[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  isDeleted     Boolean     @default(false)
+}
+
+model Staff {
+  id           String     @id @default(cuid())
+  employeeId   String     @default("")
+  name         String
+  phone        String     @default("")
+  pin          String
+  role         StaffRole  @default(WAITER)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  orders       Order[]
+  isDeleted    Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id])
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  quantity   Int
+  unitPrice  Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  isDeleted  Boolean  @default(false)
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  invoiceNumber  String
+  subscriptionId String
+  subscription   Subscription  @relation(fields: [subscriptionId], references: [id])
+  amount         Float
+  status         InvoiceStatus @default(PAID)
+  date           DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  isDeleted      Boolean       @default(false)
+}
+
+model Customer {
+  id            String     @id @default(cuid())
+  phone         String
+  name          String     @default("")
+  visitCount    Int        @default(1)
+  totalSpent    Float      @default(0)
+  lastVisitAt   DateTime   @default(now())
+  restaurantId  String
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
+  orders        Order[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@unique([restaurantId, phone])
+}
+
+enum ServiceMode {
+  DINE_IN
+  WALK_IN
+}
+
+enum PlanType {
+  STARTER
+  GROWTH
+  MULTI
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+}
+
+enum MenuItemType {
+  VEG
+  NON_VEG
+}
+
+enum TableStatus {
+  FREE
+  OCCUPIED
+}
+
+enum OrderStatus {
+  NEW
+  COOKING
+  READY
+  BILLED
+  SETTLED
+}
+
+enum InvoiceStatus {
+  PAID
+  PENDING
+}
+
+enum StaffRole {
+  WAITER
+  CAPTAIN
+}
