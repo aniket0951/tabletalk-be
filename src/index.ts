@@ -22,13 +22,25 @@ import { userRoutes } from "./routes/user";
 const app = new Hono<Env>();
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const allowedOrigins = [
+  FRONTEND_URL,
+  "http://localhost:3000",
+  "http://192.168.1.102:3000",
+  "http://192.168.1.105:3000",
+].filter(Boolean);
 
 app.use("*", logger());
 
 app.use(
   "*",
   cors({
-    origin: [FRONTEND_URL, "http://localhost:3000", "http://192.168.1.102:3000"],
+    origin: (origin) => {
+      if (!origin) return FRONTEND_URL;
+      if (allowedOrigins.includes(origin)) return origin;
+      // Allow all Vercel preview deployments
+      if (origin.endsWith(".vercel.app")) return origin;
+      return FRONTEND_URL;
+    },
     credentials: true,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
@@ -60,7 +72,13 @@ const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
 // Attach Socket.IO to the same HTTP server
 const io = new Server(server, {
   cors: {
-    origin: [FRONTEND_URL, "http://localhost:3000", "http://192.168.1.102:3000"],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin) || (origin && origin.endsWith(".vercel.app"))) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true,
   },
