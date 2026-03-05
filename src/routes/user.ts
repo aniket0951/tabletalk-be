@@ -18,7 +18,7 @@ userRoutes.delete("/delete", async (c) => {
     });
     const restaurantIds = restaurants.map((r: { id: string }) => r.id);
 
-    await prisma.$transaction(async (tx: typeof prisma) => {
+    await prisma.$transaction(async (tx) => {
       if (restaurantIds.length > 0) {
         const orderIds = (
           await tx.order.findMany({
