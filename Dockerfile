@@ -6,12 +6,12 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 RUN npm ci
-RUN npx prisma generate
 
 # Build
 COPY tsconfig.json ./
 COPY src ./src/
 RUN npm run build
+
 
 # Production
 FROM node:20-slim
@@ -23,6 +23,8 @@ RUN npm ci --omit=dev
 
 COPY --from=base /app/dist ./dist
 COPY prisma ./prisma/
+
+# Generate prisma client at runtime stage
 RUN npx prisma generate
 
 EXPOSE 3004
