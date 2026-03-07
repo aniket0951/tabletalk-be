@@ -2,4 +2,4 @@
 buildCommand = "npm ci && npx prisma generate && npx tsc"
 
 [deploy]
-startCommand = "echo \"DATABASE_URL=$DATABASE_URL\" > .env && node dist/index.js"
+startCommand = "printenv > .env && node dist/index.js"
