@@ -21,8 +21,17 @@ export async function createStaffToken(payload: StaffJwtPayload): Promise<string
     .sign(SECRET);
 }
 
-export async function verifyStaffTokenFromCookie(c: Context): Promise<StaffJwtPayload | null> {
+export async function verifyStaffToken(c: Context): Promise<StaffJwtPayload | null> {
   try {
+    // Try Authorization header first (Bearer token from localStorage)
+    const authHeader = c.req.header("Authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.slice(7);
+      const { payload } = await jwtVerify(token, SECRET);
+      return payload as unknown as StaffJwtPayload;
+    }
+
+    // Fallback to cookie
     const token = getCookie(c, COOKIE_NAME);
     if (!token) return null;
 

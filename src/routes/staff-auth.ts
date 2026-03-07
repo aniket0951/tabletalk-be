@@ -39,6 +39,7 @@ staffAuthRoutes.post("/login", async (c) => {
     setStaffCookie(c, token);
 
     return c.json({
+      token,
       staffId: staff.id,
       name: staff.name,
       role: staff.role,
