@@ -120,7 +120,7 @@ protectedRoutes.post("/checkout", async (c) => {
     // Create Razorpay subscription
     const rzpSubscription = await getRazorpay().subscriptions.create({
       plan_id: razorpayPlanId,
-      total_count: 0, // infinite billing cycles
+      total_count: 120, // 10 years of monthly billing
       customer_notify: 1,
       notes: {
         restaurant_id: restaurant.id,
@@ -152,9 +152,10 @@ protectedRoutes.post("/checkout", async (c) => {
       name: restaurant.name,
       email: restaurant.user.email,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.log("Checkout Error:", error);
-    return c.json({ error: "Server error" }, 500);
+    const detail = error?.error?.description || error?.message || String(error);
+    return c.json({ error: "Server error", detail }, 500);
   }
 });
 
