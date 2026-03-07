@@ -21,10 +21,9 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
 
-COPY --from=base /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=base /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=base /app/dist ./dist
 COPY prisma ./prisma/
+RUN npx prisma generate
 
 EXPOSE 3004
 
