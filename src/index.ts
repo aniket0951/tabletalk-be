@@ -18,6 +18,8 @@ import { customersRoutes } from "./routes/customers";
 import { dashboardRoutes } from "./routes/dashboard";
 import { billingRoutes } from "./routes/billing";
 import { userRoutes } from "./routes/user";
+import { subscriptionGuard } from "./middleware/subscription-guard";
+import { ownerAuth } from "./middleware/owner-auth";
 
 const app = new Hono<Env>();
 
@@ -49,19 +51,27 @@ app.use(
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 
-// Mount routes
+// Mount routes — exempt from subscription guard
 app.route("/auth", authRoutes);
 app.route("/restaurant", restaurantRoutes);
+app.route("/billing", billingRoutes);
+app.route("/user", userRoutes);
+app.route("/staff/auth", staffAuthRoutes);
+
+// Subscription guard — ownerAuth first to set userId, then guard checks subscription
+app.use("/menu/*", ownerAuth, subscriptionGuard);
+app.use("/tables/*", ownerAuth, subscriptionGuard);
+app.use("/orders/*", ownerAuth, subscriptionGuard);
+app.use("/customers/*", ownerAuth, subscriptionGuard);
+app.use("/dashboard/*", ownerAuth, subscriptionGuard);
+
 app.route("/menu", menuRoutes);
 app.route("/tables", tablesRoutes);
-app.route("/staff/auth", staffAuthRoutes);
 app.route("/staff/orders", staffOrdersRoutes);
 app.route("/staff", staffRoutes);
 app.route("/orders", ordersRoutes);
 app.route("/customers", customersRoutes);
 app.route("/dashboard", dashboardRoutes);
-app.route("/billing", billingRoutes);
-app.route("/user", userRoutes);
 
 const PORT = parseInt(process.env.PORT || "3004", 10);
 

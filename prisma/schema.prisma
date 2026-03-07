@@ -28,7 +28,7 @@ model Restaurant {
   restaurantCode String?         @unique
   userId         String
   user           User           @relation(fields: [userId], references: [id])
-  subscription   Subscription?
+  subscriptions  Subscription[]
   categories     MenuCategory[]
   tables         DiningTable[]
   orders         Order[]
@@ -40,17 +40,28 @@ model Restaurant {
 }
 
 model Subscription {
-  id           String             @id @default(cuid())
-  plan         PlanType           @default(GROWTH)
-  status       SubscriptionStatus @default(TRIAL)
-  startDate    DateTime           @default(now())
-  endDate      DateTime
-  restaurantId String             @unique
-  restaurant   Restaurant         @relation(fields: [restaurantId], references: [id])
-  invoices     Invoice[]
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  isDeleted    Boolean            @default(false)
+  id                     String             @id @default(cuid())
+  plan                   PlanType           @default(GROWTH)
+  status                 SubscriptionStatus @default(TRIAL)
+  startDate              DateTime           @default(now())
+  endDate                DateTime
+  restaurantId           String
+  restaurant             Restaurant         @relation(fields: [restaurantId], references: [id])
+  invoices               Invoice[]
+
+  // Razorpay fields
+  razorpaySubscriptionId String?            @unique
+  razorpayCustomerId     String?
+  razorpayPlanId         String?
+  razorpayShortUrl       String?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelledAt            DateTime?
+  paymentMethod          String?
+
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  isDeleted              Boolean            @default(false)
 }
 
 model MenuCategory {
@@ -156,16 +167,33 @@ model OrderItem {
 }
 
 model Invoice {
-  id             String        @id @default(cuid())
-  invoiceNumber  String
-  subscriptionId String
-  subscription   Subscription  @relation(fields: [subscriptionId], references: [id])
-  amount         Float
-  status         InvoiceStatus @default(PAID)
-  date           DateTime      @default(now())
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  isDeleted      Boolean       @default(false)
+  id                String        @id @default(cuid())
+  invoiceNumber     String
+  subscriptionId    String
+  subscription      Subscription  @relation(fields: [subscriptionId], references: [id])
+  amount            Float
+  status            InvoiceStatus @default(PAID)
+  date              DateTime      @default(now())
+
+  // Razorpay fields
+  razorpayPaymentId String?       @unique
+  razorpayInvoiceId String?       @unique
+  razorpayOrderId   String?
+  paidAt            DateTime?
+  paymentMethod     String?
+  currency          String        @default("INR")
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  isDeleted         Boolean       @default(false)
+}
+
+model RazorpayWebhookLog {
+  id        String   @id @default(cuid())
+  eventType String
+  payload   String
+  processed Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 model Customer {
@@ -199,6 +227,11 @@ enum SubscriptionStatus {
   TRIAL
   ACTIVE
   EXPIRED
+  PENDING
+  HALTED
+  CANCELLED
+  COMPLETED
+  PAUSED
 }
 
 enum MenuItemType {
@@ -222,6 +255,8 @@ enum OrderStatus {
 enum InvoiceStatus {
   PAID
   PENDING
+  FAILED
+  REFUNDED
 }
 
 enum StaffRole {
