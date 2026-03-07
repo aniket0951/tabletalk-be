@@ -46,7 +46,10 @@ app.use(
   })
 );
 
-app.get("/health", (c) => c.json({ status: "ok" }));
+app.get("/health", (c) => c.json({
+  status: "ok",
+  dbUrl: process.env.DATABASE_URL || "NOT SET",
+}));
 
 // Mount routes
 app.route("/auth", authRoutes);
