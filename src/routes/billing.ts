@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
 import {
-  razorpay,
+  getRazorpay,
   RAZORPAY_PLAN_IDS,
   PLAN_PRICES,
   verifyPaymentSignature,
@@ -118,7 +118,7 @@ protectedRoutes.post("/checkout", async (c) => {
       RAZORPAY_PLAN_IDS[plan as keyof typeof RAZORPAY_PLAN_IDS];
 
     // Create Razorpay subscription
-    const rzpSubscription = await razorpay.subscriptions.create({
+    const rzpSubscription = await getRazorpay().subscriptions.create({
       plan_id: razorpayPlanId,
       total_count: 0, // infinite billing cycles
       customer_notify: 1,
@@ -195,7 +195,7 @@ protectedRoutes.post("/verify", async (c) => {
     }
 
     // Fetch subscription details from Razorpay
-    const rzpSub = await razorpay.subscriptions.fetch(
+    const rzpSub = await getRazorpay().subscriptions.fetch(
       razorpay_subscription_id
     );
 
@@ -258,7 +258,7 @@ protectedRoutes.post("/cancel", async (c) => {
 
     // Cancel on Razorpay if it exists
     if (subscription.razorpaySubscriptionId) {
-      await razorpay.subscriptions.cancel(
+      await getRazorpay().subscriptions.cancel(
         subscription.razorpaySubscriptionId,
         false // cancel at end of billing cycle
       );
