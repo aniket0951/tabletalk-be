@@ -33,14 +33,8 @@ app.use("*", logger());
 app.use(
   "*",
   cors({
-    origin: (origin) => {
-      if (!origin) return FRONTEND_URL;
-      if (allowedOrigins.includes(origin)) return origin;
-      // Allow all Vercel preview deployments
-      if (origin.endsWith(".vercel.app")) return origin;
-      return FRONTEND_URL;
-    },
-    credentials: true,
+    origin: "*",
+    credentials: false,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   })
