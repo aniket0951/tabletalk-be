@@ -48,7 +48,7 @@ app.use(
 
 app.get("/health", (c) => c.json({
   status: "ok",
-  hasDbUrl: !!process.env.DATABASE_URL,
+  dbUrl: process.env.DATABASE_URL || "NOT SET",
   hasJwtSecret: !!process.env.JWT_SECRET,
 }));
 
