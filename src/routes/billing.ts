@@ -119,7 +119,7 @@ protectedRoutes.post("/checkout", async (c) => {
     const rzpOrder = await getRazorpay().orders.create({
       amount,
       currency: "INR",
-      receipt: `receipt_${restaurant.id}_${Date.now()}`,
+      receipt: `rcpt_${Date.now()}`,
       notes: {
         restaurant_id: restaurant.id,
         user_id: userId,
