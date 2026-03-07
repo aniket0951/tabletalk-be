@@ -29,8 +29,9 @@ restaurantRoutes.get("/", async (c) => {
       restaurantCode: restaurant.restaurantCode,
       tableCount: restaurant._count.tables,
     });
-  } catch {
-    return c.json({ error: "Server error" }, 500);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return c.json({ error: "Server error", detail: message }, 500);
   }
 });
 
@@ -70,8 +71,9 @@ restaurantRoutes.patch("/", async (c) => {
       upiId: updated.upiId,
       serviceMode: updated.serviceMode,
     });
-  } catch {
-    return c.json({ error: "Server error" }, 500);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return c.json({ error: "Server error", detail: message }, 500);
   }
 });
 
@@ -98,7 +100,8 @@ restaurantRoutes.post("/", async (c) => {
     return c.json({ id: restaurant.id, name: restaurant.name });
   } catch (error) {
     console.log("Create Restaurant Error:", error);
-    return c.json({ error: "Server error" }, 500);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return c.json({ error: "Server error", detail: message }, 500);
   }
 });
 
@@ -136,7 +139,8 @@ restaurantRoutes.post("/code", async (c) => {
     });
 
     return c.json({ restaurantCode: updated.restaurantCode });
-  } catch {
-    return c.json({ error: "Server error" }, 500);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return c.json({ error: "Server error", detail: message }, 500);
   }
 });
