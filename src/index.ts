@@ -18,6 +18,11 @@ import { customersRoutes } from "./routes/customers";
 import { dashboardRoutes } from "./routes/dashboard";
 import { billingRoutes } from "./routes/billing";
 import { userRoutes } from "./routes/user";
+// Debug: log env vars at startup
+console.log("[env] DATABASE_URL:", process.env.DATABASE_URL ? "SET" : "NOT SET");
+console.log("[env] JWT_SECRET:", process.env.JWT_SECRET ? "SET" : "NOT SET");
+console.log("[env] PORT:", process.env.PORT);
+
 const app = new Hono<Env>();
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
