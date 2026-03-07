@@ -1,0 +1,5 @@
+[build]
+buildCommand = "npm ci && npx prisma generate && npx tsc"
+
+[deploy]
+startCommand = "node dist/index.js"
