@@ -61,8 +61,8 @@ app.route("/user", userRoutes);
 
 const PORT = parseInt(process.env.PORT || "3004", 10);
 
-const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
-  console.log(`[api] Hono server running on http://localhost:${info.port}`);
+const server = serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" }, (info) => {
+  console.log(`[api] Hono server running on http://0.0.0.0:${info.port}`);
 });
 
 // Attach Socket.IO to the same HTTP server
