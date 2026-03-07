@@ -37,7 +37,8 @@ authRoutes.post("/register", async (c) => {
     });
   } catch (error) {
     console.log("Register Error:", error);
-    return c.json({ error: "Server error" }, 500);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return c.json({ error: "Server error", detail: message }, 500);
   }
 });
 
@@ -70,7 +71,8 @@ authRoutes.post("/login", async (c) => {
     });
   } catch (error) {
     console.log("Login Error:", error);
-    return c.json({ error: "Server error" }, 500);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return c.json({ error: "Server error", detail: message }, 500);
   }
 });
 
