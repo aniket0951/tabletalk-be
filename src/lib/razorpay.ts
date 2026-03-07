@@ -21,13 +21,6 @@ export const PLAN_PRICES = {
   MULTI: 399900,
 } as const;
 
-// Map our plan types to Razorpay plan IDs (set these in .env)
-export const RAZORPAY_PLAN_IDS = {
-  STARTER: process.env.RAZORPAY_PLAN_ID_STARTER!,
-  GROWTH: process.env.RAZORPAY_PLAN_ID_GROWTH!,
-  MULTI: process.env.RAZORPAY_PLAN_ID_MULTI!,
-} as const;
-
 export function verifyWebhookSignature(
   body: string,
   signature: string
@@ -43,14 +36,14 @@ export function verifyWebhookSignature(
   );
 }
 
-export function verifyPaymentSignature(
-  razorpaySubscriptionId: string,
+export function verifyOrderPaymentSignature(
+  razorpayOrderId: string,
   razorpayPaymentId: string,
   razorpaySignature: string
 ): boolean {
   const generatedSignature = crypto
     .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
-    .update(`${razorpayPaymentId}|${razorpaySubscriptionId}`)
+    .update(`${razorpayOrderId}|${razorpayPaymentId}`)
     .digest("hex");
 
   return crypto.timingSafeEqual(
