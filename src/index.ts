@@ -4,6 +4,7 @@ import { logger } from "hono/logger";
 import { serve } from "@hono/node-server";
 import { Server } from "socket.io";
 import { setIO } from "./lib/socket";
+import { prisma } from "./lib/prisma";
 import type { Env } from "./types";
 
 import { authRoutes } from "./routes/auth";
@@ -56,10 +57,13 @@ app.use(
   })
 );
 
-app.get("/health", (c) => c.json({
-  status: "ok",
-  dbUrl: process.env.DATABASE_URL || "NOT SET",
-}));
+app.get("/health", async (c) => {
+  // Ping DB to keep Supabase warm
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch {}
+  return c.json({ status: "ok" });
+});
 
 // Mount routes
 app.route("/auth", authRoutes);
@@ -106,3 +110,13 @@ io.on("connection", (socket) => {
     console.log(`[socket] client disconnected: ${socket.id}`);
   });
 });
+
+// Keep-alive cron: ping DB every 5 minutes to prevent Supabase cold starts
+setInterval(async () => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    console.log("[keep-alive] DB ping OK");
+  } catch (err) {
+    console.error("[keep-alive] DB ping failed:", err);
+  }
+}, 5 * 60 * 1000);
