@@ -37,6 +37,15 @@ const allowedOrigins = [
 
 app.use("*", logger());
 
+// Global error handler — adds debug field to all error responses
+app.onError((err, c) => {
+  console.error(`[${c.req.method} ${c.req.path}] error:`, err);
+  return c.json({
+    error: "Server error",
+    debug: err.message || String(err),
+  }, 500);
+});
+
 app.use(
   "*",
   cors({

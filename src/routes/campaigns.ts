@@ -10,6 +10,10 @@ campaignRoutes.use("*", ownerAuth);
 
 const COST_PER_MESSAGE = 1.38; // ₹1.38 per customer (36% margin over ₹0.88 delivery cost)
 
+function debugMsg(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 // GET /campaigns — list campaigns
 campaignRoutes.get("/", async (c) => {
   try {
@@ -69,7 +73,7 @@ campaignRoutes.get("/", async (c) => {
     });
   } catch (error) {
     console.error("[GET /campaigns] error:", error);
-    return c.json({ error: "Server error" }, 500);
+    return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
   }
 });
 
@@ -107,8 +111,9 @@ campaignRoutes.get("/:id", async (c) => {
 
     const { deliveries: _, ...campaignData } = campaign;
     return c.json({ ...campaignData, stats });
-  } catch {
-    return c.json({ error: "Server error" }, 500);
+  } catch (error) {
+    console.error("[GET /campaigns/:id] error:", error);
+    return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
   }
 });
 
@@ -157,7 +162,7 @@ campaignRoutes.post("/", async (c) => {
     return c.json(campaign, 201);
   } catch (error) {
     console.error("[POST /campaigns] error:", error);
-    return c.json({ error: "Server error" }, 500);
+    return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
   }
 });
 
@@ -206,7 +211,7 @@ campaignRoutes.post("/:id/checkout", async (c) => {
     });
   } catch (error) {
     console.error("[POST /campaigns/:id/checkout] error:", error);
-    return c.json({ error: "Server error" }, 500);
+    return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
   }
 });
 
@@ -270,7 +275,7 @@ campaignRoutes.post("/:id/verify", async (c) => {
     return c.json({ success: true, message: "Payment verified. Campaign is being sent." });
   } catch (error) {
     console.error("[POST /campaigns/:id/verify] error:", error);
-    return c.json({ error: "Server error" }, 500);
+    return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
   }
 });
 
