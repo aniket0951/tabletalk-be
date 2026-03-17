@@ -168,6 +168,31 @@ campaignRoutes.post("/", async (c) => {
   }
 });
 
+// DELETE /campaigns/:id — delete a draft campaign
+campaignRoutes.delete("/:id", async (c) => {
+  try {
+    const userId = c.get("userId");
+    const id = c.req.param("id");
+
+    const restaurant = await prisma.restaurant.findFirst({
+      where: { userId, isDeleted: false },
+    });
+    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+
+    const campaign = await prisma.campaign.findFirst({
+      where: { id, restaurantId: restaurant.id, status: { in: ["DRAFT", "PAYING"] } },
+    });
+    if (!campaign) return c.json({ error: "Campaign not found or cannot be deleted" }, 404);
+
+    await prisma.campaign.delete({ where: { id: campaign.id } });
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[DELETE /campaigns/:id] error:", error);
+    return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
+  }
+});
+
 // POST /campaigns/:id/checkout — create Razorpay order for campaign payment
 campaignRoutes.post("/:id/checkout", async (c) => {
   try {
