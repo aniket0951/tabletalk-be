@@ -1,5 +1,5 @@
 [build]
-buildCommand = "npm ci && npx prisma generate && npx tsc"
+buildCommand = "npm ci && npx prisma generate && npx prisma db push && npx tsc"
 
 [deploy]
 startCommand = "printenv > .env && node dist/index.js"
