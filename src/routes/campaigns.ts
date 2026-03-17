@@ -11,7 +11,9 @@ campaignRoutes.use("*", ownerAuth);
 const COST_PER_MESSAGE = 1.38; // ₹1.38 per customer (36% margin over ₹0.88 delivery cost)
 
 function debugMsg(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null) return JSON.stringify(error);
+  return String(error);
 }
 
 // GET /campaigns — list campaigns

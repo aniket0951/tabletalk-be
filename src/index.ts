@@ -42,7 +42,7 @@ app.onError((err, c) => {
   console.error(`[${c.req.method} ${c.req.path}] error:`, err);
   return c.json({
     error: "Server error",
-    debug: err.message || String(err),
+    debug: err.message || (typeof err === "object" ? JSON.stringify(err) : String(err)),
   }, 500);
 });
 
