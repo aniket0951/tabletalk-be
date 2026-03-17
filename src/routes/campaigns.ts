@@ -173,7 +173,7 @@ campaignRoutes.post("/:id/checkout", async (c) => {
     if (!restaurant) return c.json({ error: "No restaurant" }, 404);
 
     const campaign = await prisma.campaign.findFirst({
-      where: { id, restaurantId: restaurant.id, status: "DRAFT" },
+      where: { id, restaurantId: restaurant.id, status: { in: ["DRAFT", "PAYING"] } },
     });
     if (!campaign) return c.json({ error: "Campaign not found or already paid" }, 404);
 
