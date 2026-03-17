@@ -18,6 +18,8 @@ import { customersRoutes } from "./routes/customers";
 import { dashboardRoutes } from "./routes/dashboard";
 import { billingRoutes } from "./routes/billing";
 import { userRoutes } from "./routes/user";
+import { publicRoutes } from "./routes/public";
+import { campaignRoutes } from "./routes/campaigns";
 // Debug: log env vars at startup
 console.log("[env] DATABASE_URL:", process.env.DATABASE_URL ? "SET" : "NOT SET");
 console.log("[env] JWT_SECRET:", process.env.JWT_SECRET ? "SET" : "NOT SET");
@@ -63,6 +65,8 @@ app.route("/customers", customersRoutes);
 app.route("/dashboard", dashboardRoutes);
 app.route("/billing", billingRoutes);
 app.route("/user", userRoutes);
+app.route("/public", publicRoutes);
+app.route("/campaigns", campaignRoutes);
 
 const PORT = parseInt(process.env.PORT || "3004", 10);
 

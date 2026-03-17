@@ -19,24 +19,26 @@ model User {
 }
 
 model Restaurant {
-  id             String         @id @default(cuid())
+  id             String           @id @default(cuid())
   name           String
   phone          String
-  city           String         @default("")
-  upiId          String         @default("")
-  serviceMode    ServiceMode    @default(DINE_IN)
-  restaurantCode String?         @unique
+  city           String           @default("")
+  upiId          String           @default("")
+  serviceMode    ServiceMode      @default(DINE_IN)
+  restaurantCode String?          @unique
   userId         String
-  user           User           @relation(fields: [userId], references: [id])
+  user           User             @relation(fields: [userId], references: [id])
   subscriptions  Subscription[]
   categories     MenuCategory[]
   tables         DiningTable[]
   orders         Order[]
   staff          Staff[]
   customers      Customer[]
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  isDeleted      Boolean        @default(false)
+  ratings        MenuItemRating[]
+  campaigns      Campaign[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  isDeleted      Boolean          @default(false)
 }
 
 model Subscription {
@@ -86,9 +88,12 @@ model MenuItem {
   available    Boolean      @default(true)
   categoryId   String
   category     MenuCategory @relation(fields: [categoryId], references: [id])
-  restaurantId String       @default("")
-  orderItems   OrderItem[]
-  createdAt    DateTime     @default(now())
+  restaurantId  String       @default("")
+  orderItems    OrderItem[]
+  ratings       MenuItemRating[]
+  averageRating Float        @default(0)
+  ratingCount   Int          @default(0)
+  createdAt     DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   isDeleted    Boolean      @default(false)
 }
@@ -133,6 +138,7 @@ model Order {
   billedAt      DateTime?
   settledAt     DateTime?
   items         OrderItem[]
+  ratings       MenuItemRating[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   isDeleted     Boolean     @default(false)
@@ -205,11 +211,92 @@ model Customer {
   lastVisitAt   DateTime   @default(now())
   restaurantId  String
   restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
-  orders        Order[]
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  orders              Order[]
+  ratings             MenuItemRating[]
+  campaignDeliveries  CampaignDelivery[]
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
   @@unique([restaurantId, phone])
+}
+
+model MenuItemRating {
+  id           String     @id @default(cuid())
+  orderId      String
+  order        Order      @relation(fields: [orderId], references: [id])
+  menuItemId   String
+  menuItem     MenuItem   @relation(fields: [menuItemId], references: [id])
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  customerId   String
+  customer     Customer   @relation(fields: [customerId], references: [id])
+  rating       Int
+  note         String     @default("")
+  createdAt    DateTime   @default(now())
+}
+
+model Campaign {
+  id                String             @id @default(cuid())
+  restaurantId      String
+  restaurant        Restaurant         @relation(fields: [restaurantId], references: [id])
+  type              CampaignType       @default(CUSTOM)
+  title             String
+  message           String
+  imageUrl          String             @default("")
+  audienceCount     Int                @default(0)
+  costPerMessage    Float              @default(0.50)
+  totalCost         Float              @default(0)
+  status            CampaignStatus     @default(DRAFT)
+  scheduledAt       DateTime?
+  sentAt            DateTime?
+  completedAt       DateTime?
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  deliveries        CampaignDelivery[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model CampaignDelivery {
+  id          String          @id @default(cuid())
+  campaignId  String
+  campaign    Campaign        @relation(fields: [campaignId], references: [id])
+  customerId  String
+  customer    Customer        @relation(fields: [customerId], references: [id])
+  channel     DeliveryChannel @default(WHATSAPP)
+  status      DeliveryStatus  @default(PENDING)
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  failReason  String          @default("")
+  createdAt   DateTime        @default(now())
+}
+
+enum CampaignType {
+  DISCOUNT
+  NEW_DISH
+  FESTIVAL
+  CUSTOM
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  PAYING
+  SENDING
+  COMPLETED
+  FAILED
+}
+
+enum DeliveryChannel {
+  WHATSAPP
+  SMS
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
 }
 
 enum ServiceMode {
