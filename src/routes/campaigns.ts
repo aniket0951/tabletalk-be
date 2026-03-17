@@ -30,42 +30,52 @@ campaignRoutes.get("/", async (c) => {
 
     const where = { restaurantId: restaurant.id };
 
-    const [campaigns, total] = await Promise.all([
+    const [campaigns, total, aggStats] = await Promise.all([
       prisma.campaign.findMany({
         where,
-        include: {
-          _count: { select: { deliveries: true } },
-          deliveries: {
-            select: { status: true },
-          },
-        },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
       }),
       prisma.campaign.count({ where }),
+      prisma.campaign.aggregate({
+        where: { restaurantId: restaurant.id },
+        _sum: { audienceCount: true, totalCost: true },
+        _count: true,
+      }),
     ]);
 
-    // Compute delivery stats per campaign
-    const result = campaigns.map((c) => {
-      const sent = c.deliveries.filter((d) => d.status === "SENT").length;
-      const delivered = c.deliveries.filter((d) => d.status === "DELIVERED").length;
-      const failed = c.deliveries.filter((d) => d.status === "FAILED").length;
-      const pending = c.deliveries.filter((d) => d.status === "PENDING").length;
-      const { deliveries: _, _count, ...campaign } = c;
-      return { ...campaign, stats: { sent, delivered, failed, pending, total: _count.deliveries } };
-    });
+    // Get delivery counts grouped by status for these campaigns (single query)
+    const campaignIds = campaigns.map((c) => c.id);
+    const deliveryCounts = campaignIds.length > 0
+      ? await prisma.campaignDelivery.groupBy({
+          by: ["campaignId", "status"],
+          where: { campaignId: { in: campaignIds } },
+          _count: true,
+        })
+      : [];
 
-    // Aggregate stats
-    const allCampaigns = await prisma.campaign.findMany({
-      where: { restaurantId: restaurant.id },
-      select: { audienceCount: true, totalCost: true, status: true },
-    });
+    // Build stats map per campaign
+    const statsMap = new Map<string, { sent: number; delivered: number; failed: number; pending: number; total: number }>();
+    for (const row of deliveryCounts) {
+      const existing = statsMap.get(row.campaignId) || { sent: 0, delivered: 0, failed: 0, pending: 0, total: 0 };
+      existing.total += row._count;
+      if (row.status === "SENT") existing.sent = row._count;
+      else if (row.status === "DELIVERED") existing.delivered = row._count;
+      else if (row.status === "FAILED") existing.failed = row._count;
+      else if (row.status === "PENDING") existing.pending = row._count;
+      statsMap.set(row.campaignId, existing);
+    }
+
+    const result = campaigns.map((c) => ({
+      ...c,
+      stats: statsMap.get(c.id) || { sent: 0, delivered: 0, failed: 0, pending: 0, total: 0 },
+    }));
 
     const stats = {
-      totalCampaigns: allCampaigns.length,
-      totalReach: allCampaigns.reduce((s, c) => s + c.audienceCount, 0),
-      totalSpent: allCampaigns.filter((c) => c.status !== "DRAFT" && c.status !== "FAILED").reduce((s, c) => s + c.totalCost, 0),
+      totalCampaigns: aggStats._count,
+      totalReach: aggStats._sum.audienceCount || 0,
+      totalSpent: aggStats._sum.totalCost || 0,
     };
 
     return c.json({
