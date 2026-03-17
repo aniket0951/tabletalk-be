@@ -184,7 +184,9 @@ campaignRoutes.post("/:id/checkout", async (c) => {
     });
     if (!campaign) return c.json({ error: "Campaign not found or already paid" }, 404);
 
-    const amountInPaise = Math.round(campaign.totalCost * 100);
+    // Razorpay minimum order is ₹1 (100 paise)
+    const amountInPaise = Math.max(100, Math.round(campaign.totalCost * 100));
+    console.log(`[checkout] campaignId=${campaign.id}, totalCost=${campaign.totalCost}, amountInPaise=${amountInPaise}`);
 
     const rzpOrder = await getRazorpay().orders.create({
       amount: amountInPaise,
