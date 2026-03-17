@@ -8,7 +8,7 @@ export const campaignRoutes = new Hono<Env>();
 
 campaignRoutes.use("*", ownerAuth);
 
-const COST_PER_MESSAGE = 0.5; // ₹0.50 per customer
+const COST_PER_MESSAGE = 1.38; // ₹1.38 per customer (36% margin over ₹0.88 delivery cost)
 
 // GET /campaigns — list campaigns
 campaignRoutes.get("/", async (c) => {
@@ -131,6 +131,7 @@ campaignRoutes.post("/", async (c) => {
     const audienceCount = await prisma.customer.count({
       where: { restaurantId: restaurant.id },
     });
+    console.log(`[POST /campaigns] userId=${userId}, restaurantId=${restaurant.id}, audienceCount=${audienceCount}`);
 
     if (audienceCount === 0) {
       return c.json({ error: "No customers to target" }, 400);
