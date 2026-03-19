@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { staffAuth } from "../middleware/staff-auth";
 import { emitSocketEvent } from "../lib/socket";
-import { orderListSelect, orderDetailInclude } from "../lib/order-select";
+import { orderDetailInclude } from "../lib/order-select";
 import type { Env } from "../types";
 
 export const staffOrdersRoutes = new Hono<Env>();
@@ -33,7 +33,7 @@ staffOrdersRoutes.get("/", async (c) => {
         staffId: payload.staffId,
         ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
       },
-      select: orderListSelect,
+      include: orderDetailInclude,
       orderBy: { placedAt: "desc" },
     });
     return c.json(orders);
