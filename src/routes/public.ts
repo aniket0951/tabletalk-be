@@ -33,35 +33,58 @@ publicRoutes.get("/table/:tableId", async (c) => {
   }
 });
 
-// GET /public/menu/:restaurantId — categories with available items
+// GET /public/menu/:restaurantId — categories only (no items)
 publicRoutes.get("/menu/:restaurantId", async (c) => {
   try {
     const restaurantId = c.req.param("restaurantId");
 
     const categories = await prisma.menuCategory.findMany({
       where: { restaurantId },
-      include: {
-        items: {
-          where: { available: true, isDeleted: false },
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            price: true,
-            type: true,
-            available: true,
-            categoryId: true,
-            restaurantId: true,
-            averageRating: true,
-            ratingCount: true,
-          },
-          orderBy: { averageRating: "desc" },
-        },
+      select: {
+        id: true,
+        name: true,
+        emoji: true,
+        sortOrder: true,
+        _count: { select: { items: { where: { available: true, isDeleted: false } } } },
       },
       orderBy: { sortOrder: "asc" },
     });
 
     return c.json(categories);
+  } catch {
+    return c.json({ error: "Server error" }, 500);
+  }
+});
+
+// GET /public/menu/:restaurantId/category/:categoryId — items for one category
+publicRoutes.get("/menu/:restaurantId/category/:categoryId", async (c) => {
+  try {
+    const restaurantId = c.req.param("restaurantId");
+    const categoryId = c.req.param("categoryId");
+
+    const category = await prisma.menuCategory.findFirst({
+      where: { id: categoryId, restaurantId },
+    });
+    if (!category) return c.json({ error: "Category not found" }, 404);
+
+    const items = await prisma.menuItem.findMany({
+      where: { categoryId, available: true, isDeleted: false },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        type: true,
+        available: true,
+        categoryId: true,
+        restaurantId: true,
+        averageRating: true,
+        ratingCount: true,
+      },
+      orderBy: { averageRating: "desc" },
+    });
+
+    return c.json(items);
   } catch {
     return c.json({ error: "Server error" }, 500);
   }
