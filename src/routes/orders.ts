@@ -4,6 +4,7 @@ import { ownerAuth } from "../middleware/owner-auth";
 import { subscriptionGuard } from "../middleware/subscription-guard";
 import { emitSocketEvent } from "../lib/socket";
 import { upsertCustomer } from "../lib/customer";
+import { orderListSelect, orderDetailInclude } from "../lib/order-select";
 import type { Env } from "../types";
 
 export const ordersRoutes = new Hono<Env>();
@@ -57,7 +58,7 @@ ordersRoutes.get("/", async (c) => {
     if (!pageParam) {
       const orders = await prisma.order.findMany({
         where: { ...baseWhere, ...(status ? { status: status as never } : {}) },
-        include: { items: { include: { menuItem: true } }, table: true, staff: true },
+        select: orderListSelect,
         orderBy: { placedAt: "desc" },
       });
       return c.json(orders);
@@ -71,7 +72,7 @@ ordersRoutes.get("/", async (c) => {
     const [orders, totalFiltered, ...statusCountResults] = await Promise.all([
       prisma.order.findMany({
         where: filteredWhere,
-        include: { items: { include: { menuItem: true } }, table: true, staff: true },
+        select: orderListSelect,
         orderBy: { placedAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
@@ -118,7 +119,7 @@ ordersRoutes.get("/:id", async (c) => {
 
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { items: { include: { menuItem: true } }, table: true, staff: true },
+      include: orderDetailInclude,
     });
     if (!order || order.restaurantId !== restaurant.id) {
       return c.json({ error: "Not found" }, 404);
@@ -170,7 +171,7 @@ ordersRoutes.patch("/:id", async (c) => {
     let order = await prisma.order.update({
       where: { id },
       data: updateData,
-      include: { items: { include: { menuItem: true } }, table: true, staff: true },
+      include: orderDetailInclude,
     });
 
     if (body.status === "SETTLED" && order.customerPhone && !order.customerId) {
@@ -184,7 +185,7 @@ ordersRoutes.patch("/:id", async (c) => {
         order = await prisma.order.update({
           where: { id },
           data: { customerId },
-          include: { items: { include: { menuItem: true } }, table: true, staff: true },
+          include: orderDetailInclude,
         });
       }
     }

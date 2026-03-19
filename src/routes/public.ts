@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { emitSocketEvent } from "../lib/socket";
 import { upsertCustomer } from "../lib/customer";
 import { rateLimit } from "../middleware/rate-limit";
+import { orderDetailInclude } from "../lib/order-select";
 
 export const publicRoutes = new Hono();
 
@@ -190,11 +191,7 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
         status: "NEW",
         items: { create: orderItems },
       },
-      include: {
-        items: { include: { menuItem: true } },
-        table: true,
-        staff: true,
-      },
+      include: orderDetailInclude,
     });
 
     // Set table to OCCUPIED
@@ -227,10 +224,16 @@ publicRoutes.get("/orders/history/:phone", async (c) => {
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
         where,
-        include: {
-          items: { include: { menuItem: true } },
-          table: true,
+        select: {
+          id: true,
+          orderCode: true,
+          status: true,
+          total: true,
+          placedAt: true,
+          customerName: true,
+          table: { select: { label: true, tableNumber: true } },
           restaurant: { select: { id: true, name: true } },
+          _count: { select: { items: true } },
         },
         orderBy: { placedAt: "desc" },
         skip: (page - 1) * limit,
@@ -256,10 +259,8 @@ publicRoutes.get("/orders/:orderId", async (c) => {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
-        items: { include: { menuItem: true } },
-        table: true,
-        staff: true,
-        restaurant: { select: { id: true, name: true, phone: true } },
+        ...orderDetailInclude,
+        restaurant: { select: { id: true, name: true } },
       },
     });
 

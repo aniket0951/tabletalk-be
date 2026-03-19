@@ -49,11 +49,8 @@ app.onError((err, c) => {
 app.use(
   "*",
   cors({
-    origin: (origin) => {
-      if (!origin || allowedOrigins.includes(origin)) return origin || "";
-      return "";
-    },
-    credentials: true,
+    origin: "*",
+    credentials: false,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   })

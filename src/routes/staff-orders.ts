@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { staffAuth } from "../middleware/staff-auth";
 import { emitSocketEvent } from "../lib/socket";
+import { orderListSelect, orderDetailInclude } from "../lib/order-select";
 import type { Env } from "../types";
 
 export const staffOrdersRoutes = new Hono<Env>();
@@ -32,11 +33,7 @@ staffOrdersRoutes.get("/", async (c) => {
         staffId: payload.staffId,
         ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
       },
-      include: {
-        items: { include: { menuItem: true } },
-        table: true,
-        staff: true,
-      },
+      select: orderListSelect,
       orderBy: { placedAt: "desc" },
     });
     return c.json(orders);
@@ -72,7 +69,7 @@ staffOrdersRoutes.patch("/:id", async (c) => {
     const order = await prisma.order.update({
       where: { id },
       data: updateData,
-      include: { items: { include: { menuItem: true } }, table: true, staff: true },
+      include: orderDetailInclude,
     });
 
     emitSocketEvent("order:updated", order);
