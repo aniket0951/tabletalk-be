@@ -1,12 +1,13 @@
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
+import { subscriptionGuard } from "../middleware/subscription-guard";
 import { emitSocketEvent } from "../lib/socket";
 import type { Env } from "../types";
 
 export const menuRoutes = new Hono<Env>();
 
-menuRoutes.use("*", ownerAuth);
+menuRoutes.use("*", ownerAuth, subscriptionGuard);
 
 // GET /menu/items
 menuRoutes.get("/items", async (c) => {
@@ -82,7 +83,27 @@ menuRoutes.patch("/items/:id", async (c) => {
       return c.json({ error: "Not found" }, 404);
     }
 
-    const data = await c.req.json();
+    const body = await c.req.json();
+
+    // Whitelist allowed fields — prevent overwriting restaurantId, categoryId, etc.
+    const data: Record<string, unknown> = {};
+    if (body.name !== undefined) data.name = String(body.name).slice(0, 100);
+    if (body.description !== undefined) data.description = String(body.description).slice(0, 500);
+    if (body.price !== undefined) {
+      const price = Number(body.price);
+      if (isNaN(price) || price < 0 || price > 100000) {
+        return c.json({ error: "Invalid price (0-100000)" }, 400);
+      }
+      data.price = price;
+    }
+    if (body.type !== undefined) {
+      if (!["VEG", "NON_VEG"].includes(body.type)) {
+        return c.json({ error: "Invalid type (VEG or NON_VEG)" }, 400);
+      }
+      data.type = body.type;
+    }
+    if (body.available !== undefined) data.available = Boolean(body.available);
+
     const item = await prisma.menuItem.update({
       where: { id },
       data,

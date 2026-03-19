@@ -1,13 +1,14 @@
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
+import { subscriptionGuard } from "../middleware/subscription-guard";
 import { emitSocketEvent } from "../lib/socket";
 import { upsertCustomer } from "../lib/customer";
 import type { Env } from "../types";
 
 export const ordersRoutes = new Hono<Env>();
 
-ordersRoutes.use("*", ownerAuth);
+ordersRoutes.use("*", ownerAuth, subscriptionGuard);
 
 // GET /orders
 ordersRoutes.get("/", async (c) => {
@@ -107,12 +108,21 @@ ordersRoutes.get("/", async (c) => {
 // GET /orders/:id
 ordersRoutes.get("/:id", async (c) => {
   try {
+    const userId = c.get("userId");
     const id = c.req.param("id");
+
+    const restaurant = await prisma.restaurant.findFirst({
+      where: { userId, isDeleted: false },
+    });
+    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+
     const order = await prisma.order.findUnique({
       where: { id },
       include: { items: { include: { menuItem: true } }, table: true, staff: true },
     });
-    if (!order) return c.json({ error: "Not found" }, 404);
+    if (!order || order.restaurantId !== restaurant.id) {
+      return c.json({ error: "Not found" }, 404);
+    }
     return c.json(order);
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -122,7 +132,19 @@ ordersRoutes.get("/:id", async (c) => {
 // PATCH /orders/:id
 ordersRoutes.patch("/:id", async (c) => {
   try {
+    const userId = c.get("userId");
     const id = c.req.param("id");
+
+    const restaurant = await prisma.restaurant.findFirst({
+      where: { userId, isDeleted: false },
+    });
+    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+
+    const existing = await prisma.order.findUnique({ where: { id } });
+    if (!existing || existing.restaurantId !== restaurant.id) {
+      return c.json({ error: "Not found" }, 404);
+    }
+
     const body = await c.req.json();
 
     const timestampMap: Record<string, string> = {

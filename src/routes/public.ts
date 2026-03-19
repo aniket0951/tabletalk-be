@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { emitSocketEvent } from "../lib/socket";
 import { upsertCustomer } from "../lib/customer";
+import { rateLimit } from "../middleware/rate-limit";
 
 export const publicRoutes = new Hono();
 
@@ -66,7 +67,7 @@ publicRoutes.get("/menu/:restaurantId", async (c) => {
 });
 
 // POST /public/orders — create order from customer
-publicRoutes.post("/orders", async (c) => {
+publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
   try {
     const { tableId, customerPhone, customerName, specialNote, items } =
       await c.req.json();
@@ -77,6 +78,37 @@ publicRoutes.post("/orders", async (c) => {
 
     if (!customerPhone?.trim()) {
       return c.json({ error: "Phone number is required" }, 400);
+    }
+
+    // Validate phone format (10-15 digits, optional + prefix)
+    const cleanPhone = String(customerPhone).replace(/[\s\-()]/g, "");
+    if (!/^\+?\d{10,15}$/.test(cleanPhone)) {
+      return c.json({ error: "Invalid phone number format" }, 400);
+    }
+
+    // Validate customer name length
+    if (customerName && String(customerName).length > 100) {
+      return c.json({ error: "Customer name too long (max 100 chars)" }, 400);
+    }
+
+    // Validate special note length
+    if (specialNote && String(specialNote).length > 500) {
+      return c.json({ error: "Special note too long (max 500 chars)" }, 400);
+    }
+
+    // Validate items array
+    if (!Array.isArray(items) || items.length > 50) {
+      return c.json({ error: "Invalid items (max 50 items per order)" }, 400);
+    }
+
+    for (const item of items) {
+      if (!item.menuItemId || typeof item.menuItemId !== "string") {
+        return c.json({ error: "Each item must have a valid menuItemId" }, 400);
+      }
+      const qty = Number(item.quantity);
+      if (!Number.isInteger(qty) || qty < 1 || qty > 99) {
+        return c.json({ error: "Item quantity must be between 1 and 99" }, 400);
+      }
     }
 
     // Get table + restaurant
@@ -108,10 +140,11 @@ publicRoutes.post("/orders", async (c) => {
     const orderItems = items.map(
       (i: { menuItemId: string; quantity: number }) => {
         const unitPrice = priceMap.get(i.menuItemId)!;
-        subtotal += unitPrice * i.quantity;
+        const qty = Math.floor(Number(i.quantity));
+        subtotal += unitPrice * qty;
         return {
           menuItemId: i.menuItemId,
-          quantity: i.quantity,
+          quantity: qty,
           unitPrice,
         };
       }

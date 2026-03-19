@@ -5,6 +5,8 @@ import { serve } from "@hono/node-server";
 import { Server } from "socket.io";
 import { setIO } from "./lib/socket";
 import { prisma } from "./lib/prisma";
+import { verifyOwnerToken } from "./lib/jwt";
+import { verifyStaffToken as verifyStaffJwt } from "./lib/staff-jwt";
 import type { Env } from "./types";
 
 import { authRoutes } from "./routes/auth";
@@ -38,20 +40,20 @@ const allowedOrigins = [
 
 app.use("*", logger());
 
-// Global error handler — adds debug field to all error responses
+// Global error handler
 app.onError((err, c) => {
   console.error(`[${c.req.method} ${c.req.path}] error:`, err);
-  return c.json({
-    error: "Server error",
-    debug: err.message || (typeof err === "object" ? JSON.stringify(err) : String(err)),
-  }, 500);
+  return c.json({ error: "Server error" }, 500);
 });
 
 app.use(
   "*",
   cors({
-    origin: "*",
-    credentials: false,
+    origin: (origin) => {
+      if (!origin || allowedOrigins.includes(origin)) return origin || "";
+      return "";
+    },
+    credentials: true,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   })
@@ -104,10 +106,39 @@ const io = new Server(server, {
 
 setIO(io);
 
+// Socket auth middleware — verify token if provided, allow anonymous for customer order tracking
+io.use(async (socket, next) => {
+  const token = socket.handshake.auth?.token as string | undefined;
+  if (token) {
+    const payload = await verifyOwnerToken(token);
+    if (payload) {
+      socket.data.userId = payload.userId;
+      socket.data.role = "owner";
+    } else {
+      // Could be a staff token — still valid JWT, just different payload
+      try {
+        const { jwtVerify } = await import("jose");
+        const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
+        const { payload: staffPayload } = await jwtVerify(token, secret);
+        if (staffPayload.staffId) {
+          socket.data.staffId = staffPayload.staffId;
+          socket.data.role = "staff";
+        }
+      } catch {
+        // Invalid token — allow as anonymous (customer)
+      }
+    }
+  }
+  // Allow all connections (customers need socket for order tracking)
+  // but tag unauthenticated ones as "customer"
+  if (!socket.data.role) socket.data.role = "customer";
+  next();
+});
+
 io.on("connection", (socket) => {
-  console.log(`[socket] client connected: ${socket.id}`);
+  console.log(`[socket] ${socket.data.role} connected: ${socket.id}`);
   socket.on("disconnect", () => {
-    console.log(`[socket] client disconnected: ${socket.id}`);
+    console.log(`[socket] ${socket.data.role} disconnected: ${socket.id}`);
   });
 });
 

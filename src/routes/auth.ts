@@ -4,17 +4,31 @@ import { createId } from "@paralleldrive/cuid2";
 import { prisma } from "../lib/prisma";
 import { createOwnerToken } from "../lib/jwt";
 import { ownerAuth } from "../middleware/owner-auth";
+import { rateLimit } from "../middleware/rate-limit";
 import type { Env } from "../types";
 
 export const authRoutes = new Hono<Env>();
 
-// POST /auth/register
-authRoutes.post("/register", async (c) => {
+// POST /auth/register — 5 attempts per 15 minutes
+authRoutes.post("/register", rateLimit(5, 15 * 60 * 1000), async (c) => {
   try {
     const { name, email, password } = await c.req.json();
 
     if (!name || !email || !password) {
       return c.json({ error: "Missing fields" }, 400);
+    }
+
+    if (typeof password !== "string" || password.length < 8) {
+      return c.json({ error: "Password must be at least 8 characters" }, 400);
+    }
+
+    if (password.length > 128) {
+      return c.json({ error: "Password too long" }, 400);
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return c.json({ error: "Invalid email format" }, 400);
     }
 
     const existing = await prisma.user.findFirst({
@@ -37,13 +51,12 @@ authRoutes.post("/register", async (c) => {
     });
   } catch (error) {
     console.log("Register Error:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return c.json({ error: "Server error", detail: message }, 500);
+    return c.json({ error: "Server error" }, 500);
   }
 });
 
-// POST /auth/login
-authRoutes.post("/login", async (c) => {
+// POST /auth/login — 10 attempts per 15 minutes
+authRoutes.post("/login", rateLimit(10, 15 * 60 * 1000), async (c) => {
   try {
     const { email, password } = await c.req.json();
 
@@ -71,8 +84,7 @@ authRoutes.post("/login", async (c) => {
     });
   } catch (error) {
     console.log("Login Error:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return c.json({ error: "Server error", detail: message }, 500);
+    return c.json({ error: "Server error" }, 500);
   }
 });
 

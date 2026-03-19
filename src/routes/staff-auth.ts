@@ -1,13 +1,15 @@
 import { Hono } from "hono";
+import { compare } from "bcryptjs";
 import { prisma } from "../lib/prisma";
 import { createStaffToken, setStaffCookie, clearStaffCookie } from "../lib/staff-jwt";
 import { staffAuth } from "../middleware/staff-auth";
+import { rateLimit } from "../middleware/rate-limit";
 import type { Env } from "../types";
 
 export const staffAuthRoutes = new Hono<Env>();
 
-// POST /staff/auth/login
-staffAuthRoutes.post("/login", async (c) => {
+// POST /staff/auth/login — 10 attempts per 15 minutes (4-digit PIN is brute-forceable)
+staffAuthRoutes.post("/login", rateLimit(10, 15 * 60 * 1000), async (c) => {
   try {
     const { restaurantCode, pin } = await c.req.json();
 
@@ -22,9 +24,17 @@ staffAuthRoutes.post("/login", async (c) => {
       return c.json({ error: "Invalid restaurant code" }, 401);
     }
 
-    const staff = await prisma.staff.findFirst({
-      where: { restaurantId: restaurant.id, pin, isDeleted: false },
+    // Find staff by comparing hashed PIN (constant-time via bcrypt)
+    const allStaff = await prisma.staff.findMany({
+      where: { restaurantId: restaurant.id, isDeleted: false },
     });
+    let staff = null;
+    for (const s of allStaff) {
+      if (await compare(pin, s.pin)) {
+        staff = s;
+        break;
+      }
+    }
     if (!staff) {
       return c.json({ error: "Invalid PIN" }, 401);
     }

@@ -117,9 +117,10 @@ restaurantRoutes.post("/code", async (c) => {
 
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     function generateCode(): string {
+      const bytes = crypto.getRandomValues(new Uint8Array(6));
       let code = "";
       for (let i = 0; i < 6; i++) {
-        code += chars[Math.floor(Math.random() * chars.length)];
+        code += chars[bytes[i] % chars.length];
       }
       return code;
     }

@@ -1,12 +1,14 @@
 import { Hono } from "hono";
+import { hash, compare } from "bcryptjs";
 import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
+import { subscriptionGuard } from "../middleware/subscription-guard";
 import { emitSocketEvent } from "../lib/socket";
 import type { Env } from "../types";
 
 export const staffRoutes = new Hono<Env>();
 
-staffRoutes.use("*", ownerAuth);
+staffRoutes.use("*", ownerAuth, subscriptionGuard);
 
 // GET /staff
 staffRoutes.get("/", async (c) => {
@@ -21,6 +23,7 @@ staffRoutes.get("/", async (c) => {
     const staff = await prisma.staff.findMany({
       where: { restaurantId: restaurant.id, isDeleted: false },
       orderBy: { createdAt: "asc" },
+      select: { id: true, employeeId: true, name: true, phone: true, role: true, restaurantId: true, createdAt: true },
     });
 
     return c.json(staff);
@@ -47,12 +50,17 @@ staffRoutes.post("/", async (c) => {
       return c.json({ error: "PIN must be exactly 4 digits" }, 400);
     }
 
-    const existing = await prisma.staff.findFirst({
-      where: { restaurantId: restaurant.id, pin, isDeleted: false },
+    // Check PIN uniqueness by comparing hashes
+    const allStaff = await prisma.staff.findMany({
+      where: { restaurantId: restaurant.id, isDeleted: false },
     });
-    if (existing) {
-      return c.json({ error: "PIN already in use by another staff member" }, 400);
+    for (const s of allStaff) {
+      if (await compare(pin, s.pin)) {
+        return c.json({ error: "PIN already in use by another staff member" }, 400);
+      }
     }
+
+    const pinHash = await hash(pin, 10);
 
     const lastStaff = await prisma.staff.findFirst({
       where: { restaurantId: restaurant.id },
@@ -70,7 +78,7 @@ staffRoutes.post("/", async (c) => {
         employeeId,
         name,
         phone: phone || "",
-        pin,
+        pin: pinHash,
         role: role || "WAITER",
         restaurantId: restaurant.id,
       },
@@ -105,19 +113,27 @@ staffRoutes.patch("/:id", async (c) => {
       if (!/^\d{4}$/.test(pin)) {
         return c.json({ error: "PIN must be exactly 4 digits" }, 400);
       }
-      const pinTaken = await prisma.staff.findFirst({
-        where: { restaurantId: restaurant.id, pin, isDeleted: false, id: { not: id } },
+      // Check uniqueness against other staff by comparing hashes
+      const otherStaff = await prisma.staff.findMany({
+        where: { restaurantId: restaurant.id, isDeleted: false, id: { not: id } },
       });
-      if (pinTaken) {
-        return c.json({ error: "PIN already in use by another staff member" }, 400);
+      for (const s of otherStaff) {
+        if (await compare(pin, s.pin)) {
+          return c.json({ error: "PIN already in use by another staff member" }, 400);
+        }
       }
     }
 
     const data: Record<string, unknown> = {};
-    if (name !== undefined) data.name = name;
-    if (phone !== undefined) data.phone = phone;
-    if (pin !== undefined) data.pin = pin;
-    if (role !== undefined) data.role = role;
+    if (name !== undefined) data.name = String(name).slice(0, 100);
+    if (phone !== undefined) data.phone = String(phone).slice(0, 20);
+    if (pin !== undefined) data.pin = await hash(pin, 10);
+    if (role !== undefined) {
+      if (!["WAITER", "CAPTAIN"].includes(role)) {
+        return c.json({ error: "Invalid role" }, 400);
+      }
+      data.role = role;
+    }
 
     const staff = await prisma.staff.update({
       where: { id },
