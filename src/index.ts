@@ -89,15 +89,8 @@ const server = serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" }, (inf
 // Attach Socket.IO to the same HTTP server
 const io = new Server(server, {
   cors: {
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || (origin && origin.endsWith(".vercel.app"))) {
-        callback(null, true);
-      } else {
-        callback(null, false);
-      }
-    },
+    origin: "*",
     methods: ["GET", "POST"],
-    credentials: true,
   },
 });
 
