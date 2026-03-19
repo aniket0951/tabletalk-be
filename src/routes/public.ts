@@ -233,6 +233,53 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
   }
 });
 
+// GET /public/orders/active/:tableId — active (non-SETTLED) order on this table
+publicRoutes.get("/orders/active/:tableId", async (c) => {
+  try {
+    const tableId = c.req.param("tableId");
+
+    const order = await prisma.order.findFirst({
+      where: {
+        tableId,
+        status: { notIn: ["SETTLED"] },
+        isDeleted: false,
+      },
+      include: orderDetailInclude,
+      orderBy: { placedAt: "desc" },
+    });
+
+    if (!order) {
+      return c.json({ active: false, order: null });
+    }
+
+    return c.json({ active: true, order });
+  } catch {
+    return c.json({ error: "Server error" }, 500);
+  }
+});
+
+// GET /public/orders/active-by-phone/:phone — active orders for a phone number
+publicRoutes.get("/orders/active-by-phone/:phone", async (c) => {
+  try {
+    const phone = c.req.param("phone").trim();
+    if (!phone) return c.json({ error: "Phone is required" }, 400);
+
+    const orders = await prisma.order.findMany({
+      where: {
+        customerPhone: phone,
+        status: { notIn: ["SETTLED"] },
+        isDeleted: false,
+      },
+      include: orderDetailInclude,
+      orderBy: { placedAt: "desc" },
+    });
+
+    return c.json({ orders });
+  } catch {
+    return c.json({ error: "Server error" }, 500);
+  }
+});
+
 // GET /public/orders/history/:phone — order history by phone number
 publicRoutes.get("/orders/history/:phone", async (c) => {
   try {
