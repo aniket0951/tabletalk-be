@@ -2,8 +2,25 @@ import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { staffAuth } from "../middleware/staff-auth";
 import { emitSocketEvent } from "../lib/socket";
-import { orderDetailInclude } from "../lib/order-select";
 import type { Env } from "../types";
+
+// Lean select for staff order cards — only what the UI needs
+const staffOrderSelect = {
+  id: true,
+  orderCode: true,
+  status: true,
+  total: true,
+  placedAt: true,
+  staffId: true,
+  table: { select: { label: true } },
+  items: {
+    where: { isDeleted: false },
+    select: {
+      quantity: true,
+      menuItem: { select: { name: true, type: true } },
+    },
+  },
+} as const;
 
 export const staffOrdersRoutes = new Hono<Env>();
 
@@ -33,7 +50,7 @@ staffOrdersRoutes.get("/", async (c) => {
         staffId: payload.staffId,
         ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
       },
-      include: orderDetailInclude,
+      select: staffOrderSelect,
       orderBy: { placedAt: "desc" },
     });
     return c.json(orders);
@@ -66,14 +83,24 @@ staffOrdersRoutes.patch("/:id", async (c) => {
       updateData[timestampMap[status]] = new Date();
     }
 
-    const order = await prisma.order.update({
+    // Full update for socket broadcast (dashboard/customer needs full data)
+    const fullOrder = await prisma.order.update({
       where: { id },
       data: updateData,
-      include: orderDetailInclude,
+      include: {
+        items: { include: { menuItem: true }, where: { isDeleted: false } },
+        table: true,
+        staff: { select: { id: true, name: true, role: true } },
+      },
     });
+    emitSocketEvent("order:updated", fullOrder);
 
-    emitSocketEvent("order:updated", order);
-    return c.json(order);
+    // Lean response for staff UI
+    const leanOrder = await prisma.order.findUnique({
+      where: { id },
+      select: staffOrderSelect,
+    });
+    return c.json(leanOrder);
   } catch {
     return c.json({ error: "Server error" }, 500);
   }
