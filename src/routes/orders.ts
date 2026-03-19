@@ -112,19 +112,20 @@ ordersRoutes.get("/:id", async (c) => {
     const userId = c.get("userId");
     const id = c.req.param("id");
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
-
+    // Single query: find order and verify ownership via restaurant.userId
     const order = await prisma.order.findUnique({
       where: { id },
-      include: orderDetailInclude,
+      include: {
+        ...orderDetailInclude,
+        restaurant: { select: { userId: true } },
+      },
     });
-    if (!order || order.restaurantId !== restaurant.id) {
+    if (!order || order.restaurant.userId !== userId) {
       return c.json({ error: "Not found" }, 404);
     }
-    return c.json(order);
+
+    const { restaurant: _r, ...orderData } = order;
+    return c.json(orderData);
   } catch {
     return c.json({ error: "Server error" }, 500);
   }
