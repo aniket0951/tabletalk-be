@@ -9,7 +9,63 @@ export const menuRoutes = new Hono<Env>();
 
 menuRoutes.use("*", ownerAuth, subscriptionGuard);
 
-// GET /menu/items
+// GET /menu/categories — categories only with item count (for tab view)
+menuRoutes.get("/categories", async (c) => {
+  try {
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
+
+    const categories = await prisma.menuCategory.findMany({
+      where: { restaurantId },
+      select: {
+        id: true,
+        name: true,
+        emoji: true,
+        sortOrder: true,
+        _count: { select: { items: { where: { isDeleted: false } } } },
+      },
+      orderBy: { sortOrder: "asc" },
+    });
+    return c.json(categories);
+  } catch {
+    return c.json({ error: "Server error" }, 500);
+  }
+});
+
+// GET /menu/categories/:categoryId/items — items for one category
+menuRoutes.get("/categories/:categoryId/items", async (c) => {
+  try {
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
+    const categoryId = c.req.param("categoryId");
+
+    const category = await prisma.menuCategory.findFirst({
+      where: { id: categoryId, restaurantId },
+    });
+    if (!category) return c.json({ error: "Category not found" }, 404);
+
+    const items = await prisma.menuItem.findMany({
+      where: { categoryId, isDeleted: false },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        type: true,
+        available: true,
+        categoryId: true,
+        averageRating: true,
+        ratingCount: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    return c.json(items);
+  } catch {
+    return c.json({ error: "Server error" }, 500);
+  }
+});
+
+// GET /menu/items — all categories with items (backward compat)
 menuRoutes.get("/items", async (c) => {
   try {
     const restaurantId = c.get("restaurantId");
