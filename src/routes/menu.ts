@@ -35,19 +35,12 @@ menuRoutes.get("/categories", async (c) => {
 // GET /menu/categories/:categoryId/items — items for one category
 menuRoutes.get("/categories/:categoryId/items", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
-    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const categoryId = c.req.param("categoryId");
 
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(c.req.query("limit") || "20", 10)));
 
-    // Single query — filter by category + restaurant ownership via relation
-    const where = {
-      categoryId,
-      isDeleted: false,
-      category: { restaurantId },
-    };
+    const where = { categoryId, isDeleted: false };
 
     // Fetch limit+1 to check if more exist — avoids separate count query
     const items = await prisma.menuItem.findMany({
