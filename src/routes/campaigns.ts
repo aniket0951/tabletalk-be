@@ -118,36 +118,38 @@ campaignRoutes.get("/:id", async (c) => {
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
-    const campaign = await prisma.campaign.findFirst({
-      where: { id, restaurantId },
-      include: {
-        deliveries: {
-          select: {
-            status: true,
-            channel: true,
-            sentAt: true,
-            deliveredAt: true,
-          },
-        },
-      },
-    });
+    const [campaign, statusCounts, channelCounts] = await Promise.all([
+      prisma.campaign.findFirst({
+        where: { id, restaurantId },
+      }),
+      prisma.campaignDelivery.groupBy({
+        by: ["status"],
+        where: { campaignId: id },
+        _count: true,
+      }),
+      prisma.campaignDelivery.groupBy({
+        by: ["channel"],
+        where: { campaignId: id },
+        _count: true,
+      }),
+    ]);
 
     if (!campaign) return c.json({ error: "Campaign not found" }, 404);
 
-    const stats = {
-      sent: campaign.deliveries.filter((d) => d.status === "SENT").length,
-      delivered: campaign.deliveries.filter((d) => d.status === "DELIVERED")
-        .length,
-      failed: campaign.deliveries.filter((d) => d.status === "FAILED").length,
-      pending: campaign.deliveries.filter((d) => d.status === "PENDING").length,
-      whatsapp: campaign.deliveries.filter((d) => d.channel === "WHATSAPP")
-        .length,
-      sms: campaign.deliveries.filter((d) => d.channel === "SMS").length,
-      total: campaign.deliveries.length,
-    };
+    const stats = { sent: 0, delivered: 0, failed: 0, pending: 0, whatsapp: 0, sms: 0, total: 0 };
+    for (const row of statusCounts) {
+      stats.total += row._count;
+      if (row.status === "SENT") stats.sent = row._count;
+      else if (row.status === "DELIVERED") stats.delivered = row._count;
+      else if (row.status === "FAILED") stats.failed = row._count;
+      else if (row.status === "PENDING") stats.pending = row._count;
+    }
+    for (const row of channelCounts) {
+      if (row.channel === "WHATSAPP") stats.whatsapp = row._count;
+      else if (row.channel === "SMS") stats.sms = row._count;
+    }
 
-    const { deliveries: _, ...campaignData } = campaign;
-    return c.json({ ...campaignData, stats });
+    return c.json({ ...campaign, stats });
   } catch (error) {
     return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
   }
@@ -248,16 +250,13 @@ campaignRoutes.post("/:id/checkout", async (c) => {
       data: { razorpayOrderId: rzpOrder.id, status: "PAYING" },
     });
 
-    const userId = c.get(CTX.USER_ID);
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-
     return c.json({
       razorpayOrderId: rzpOrder.id,
       razorpayKeyId: process.env.RAZORPAY_KEY_ID,
       amount: amountInPaise,
       currency: "INR",
-      name: user?.name || "",
-      email: user?.email || "",
+      name: "",
+      email: c.get(CTX.EMAIL),
     });
   } catch (error) {
     return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
@@ -336,47 +335,49 @@ campaignRoutes.post("/:id/verify", async (c) => {
 
 // Simulated message delivery (Phase 1)
 async function simulateDelivery(campaignId: string) {
-  // Small delay to simulate async sending
   setTimeout(async () => {
     try {
       const deliveries = await prisma.campaignDelivery.findMany({
         where: { campaignId, status: "PENDING" },
+        select: { id: true },
       });
 
-      for (const delivery of deliveries) {
-        // Simulate: 85% WhatsApp success, 15% fallback to SMS
-        const whatsappSuccess = Math.random() > 0.15;
+      // Split into WhatsApp success (85%) and SMS fallback (15%)
+      const whatsappIds: string[] = [];
+      const smsSuccessIds: string[] = [];
+      const smsFailIds: string[] = [];
 
-        if (whatsappSuccess) {
-          await prisma.campaignDelivery.update({
-            where: { id: delivery.id },
-            data: {
-              status: "DELIVERED",
-              channel: "WHATSAPP",
-              sentAt: new Date(),
-              deliveredAt: new Date(),
-            },
-          });
+      for (const d of deliveries) {
+        if (Math.random() > 0.15) {
+          whatsappIds.push(d.id);
+        } else if (Math.random() > 0.05) {
+          smsSuccessIds.push(d.id);
         } else {
-          // SMS fallback — 95% success
-          const smsSuccess = Math.random() > 0.05;
-          await prisma.campaignDelivery.update({
-            where: { id: delivery.id },
-            data: {
-              status: smsSuccess ? "DELIVERED" : "FAILED",
-              channel: "SMS",
-              sentAt: new Date(),
-              deliveredAt: smsSuccess ? new Date() : null,
-              failReason: smsSuccess ? "" : "SMS delivery failed",
-            },
-          });
+          smsFailIds.push(d.id);
         }
       }
 
-      await prisma.campaign.update({
-        where: { id: campaignId },
-        data: { status: "COMPLETED", completedAt: new Date() },
-      });
+      const now = new Date();
+
+      // 3 batch updates instead of N individual updates
+      await prisma.$transaction([
+        ...(whatsappIds.length > 0 ? [prisma.campaignDelivery.updateMany({
+          where: { id: { in: whatsappIds } },
+          data: { status: "DELIVERED", channel: "WHATSAPP", sentAt: now, deliveredAt: now },
+        })] : []),
+        ...(smsSuccessIds.length > 0 ? [prisma.campaignDelivery.updateMany({
+          where: { id: { in: smsSuccessIds } },
+          data: { status: "DELIVERED", channel: "SMS", sentAt: now, deliveredAt: now },
+        })] : []),
+        ...(smsFailIds.length > 0 ? [prisma.campaignDelivery.updateMany({
+          where: { id: { in: smsFailIds } },
+          data: { status: "FAILED", channel: "SMS", sentAt: now, failReason: "SMS delivery failed" },
+        })] : []),
+        prisma.campaign.update({
+          where: { id: campaignId },
+          data: { status: "COMPLETED", completedAt: now },
+        }),
+      ]);
     } catch {
       await prisma.campaign.update({
         where: { id: campaignId },
