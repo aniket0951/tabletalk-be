@@ -145,6 +145,10 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
       return c.json({ error: "Table not found" }, 404);
     }
 
+    if (table.status === "OCCUPIED") {
+      return c.json({ error: "This table is currently occupied. Please wait for the current order to be settled.", code: "TABLE_OCCUPIED" }, 409);
+    }
+
     const restaurantId = table.restaurantId;
 
     // Fetch menu items to get prices
