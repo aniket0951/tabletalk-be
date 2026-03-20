@@ -95,6 +95,25 @@ staffOrdersRoutes.patch("/:id", async (c) => {
     });
     emitSocketEvent("order:updated", fullOrder);
 
+    // Set table to FREE when order is settled (if no other active orders on this table)
+    if (status === "SETTLED" && existing.tableId) {
+      const otherActive = await prisma.order.count({
+        where: {
+          tableId: existing.tableId,
+          status: { notIn: ["SETTLED"] },
+          id: { not: id },
+          isDeleted: false,
+        },
+      });
+      if (otherActive === 0) {
+        await prisma.diningTable.update({
+          where: { id: existing.tableId },
+          data: { status: "FREE" },
+        });
+        emitSocketEvent("table:updated", { id: existing.tableId, status: "FREE" });
+      }
+    }
+
     // Lean response for staff UI
     const leanOrder = await prisma.order.findUnique({
       where: { id },

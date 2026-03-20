@@ -164,6 +164,25 @@ ordersRoutes.patch("/:id", async (c) => {
       include: orderDetailInclude,
     });
 
+    // Set table to FREE when order is settled (if no other active orders on this table)
+    if (body.status === "SETTLED" && existing.tableId) {
+      const otherActive = await prisma.order.count({
+        where: {
+          tableId: existing.tableId,
+          status: { notIn: ["SETTLED"] },
+          id: { not: id },
+          isDeleted: false,
+        },
+      });
+      if (otherActive === 0) {
+        await prisma.diningTable.update({
+          where: { id: existing.tableId },
+          data: { status: "FREE" },
+        });
+        emitSocketEvent("table:updated", { id: existing.tableId, status: "FREE" });
+      }
+    }
+
     if (body.status === "SETTLED" && order.customerPhone && !order.customerId) {
       const customerId = await upsertCustomer({
         restaurantId: order.restaurantId,
