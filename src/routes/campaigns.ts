@@ -19,16 +19,13 @@ function debugMsg(error: unknown): string {
 // GET /campaigns — list campaigns
 campaignRoutes.get("/", async (c) => {
   try {
-    const userId = c.get("userId");
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(c.req.query("limit") || "20", 10)));
 
-    const where = { restaurantId: restaurant.id };
+    const where = { restaurantId };
 
     const [campaigns, total, aggStats] = await Promise.all([
       prisma.campaign.findMany({
@@ -39,7 +36,7 @@ campaignRoutes.get("/", async (c) => {
       }),
       prisma.campaign.count({ where }),
       prisma.campaign.aggregate({
-        where: { restaurantId: restaurant.id },
+        where: { restaurantId },
         _sum: { audienceCount: true, totalCost: true },
         _count: true,
       }),
@@ -92,16 +89,12 @@ campaignRoutes.get("/", async (c) => {
 // GET /campaigns/:id — campaign detail
 campaignRoutes.get("/:id", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
-
     const campaign = await prisma.campaign.findFirst({
-      where: { id, restaurantId: restaurant.id },
+      where: { id, restaurantId },
       include: {
         deliveries: {
           select: { status: true, channel: true, sentAt: true, deliveredAt: true },
@@ -132,11 +125,8 @@ campaignRoutes.get("/:id", async (c) => {
 // POST /campaigns — create draft campaign
 campaignRoutes.post("/", async (c) => {
   try {
-    const userId = c.get("userId");
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const { type, title, message, imageUrl, scheduledAt } = await c.req.json();
 
@@ -146,9 +136,9 @@ campaignRoutes.post("/", async (c) => {
 
     // Count customers for this restaurant
     const audienceCount = await prisma.customer.count({
-      where: { restaurantId: restaurant.id },
+      where: { restaurantId },
     });
-    console.log(`[POST /campaigns] userId=${userId}, restaurantId=${restaurant.id}, audienceCount=${audienceCount}`);
+    console.log(`[POST /campaigns] restaurantId=${restaurantId}, audienceCount=${audienceCount}`);
 
     if (audienceCount === 0) {
       return c.json({ error: "No customers to target" }, 400);
@@ -158,7 +148,7 @@ campaignRoutes.post("/", async (c) => {
 
     const campaign = await prisma.campaign.create({
       data: {
-        restaurantId: restaurant.id,
+        restaurantId,
         type: type || "CUSTOM",
         title: title.trim(),
         message: message.trim(),
@@ -181,16 +171,12 @@ campaignRoutes.post("/", async (c) => {
 // DELETE /campaigns/:id — delete a draft campaign
 campaignRoutes.delete("/:id", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
-
     const campaign = await prisma.campaign.findFirst({
-      where: { id, restaurantId: restaurant.id, status: { in: ["DRAFT", "PAYING"] } },
+      where: { id, restaurantId, status: { in: ["DRAFT", "PAYING"] } },
     });
     if (!campaign) return c.json({ error: "Campaign not found or cannot be deleted" }, 404);
 
@@ -206,16 +192,12 @@ campaignRoutes.delete("/:id", async (c) => {
 // POST /campaigns/:id/checkout — create Razorpay order for campaign payment
 campaignRoutes.post("/:id/checkout", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
-
     const campaign = await prisma.campaign.findFirst({
-      where: { id, restaurantId: restaurant.id, status: { in: ["DRAFT", "PAYING"] } },
+      where: { id, restaurantId, status: { in: ["DRAFT", "PAYING"] } },
     });
     if (!campaign) return c.json({ error: "Campaign not found or already paid" }, 404);
 
@@ -229,7 +211,7 @@ campaignRoutes.post("/:id/checkout", async (c) => {
       receipt: `camp_${campaign.id.slice(-8)}`,
       notes: {
         campaign_id: campaign.id,
-        restaurant_id: restaurant.id,
+        restaurant_id: restaurantId,
       },
     });
 
@@ -238,6 +220,7 @@ campaignRoutes.post("/:id/checkout", async (c) => {
       data: { razorpayOrderId: rzpOrder.id, status: "PAYING" },
     });
 
+    const userId = c.get("userId");
     const user = await prisma.user.findUnique({ where: { id: userId } });
 
     return c.json({
@@ -257,7 +240,8 @@ campaignRoutes.post("/:id/checkout", async (c) => {
 // POST /campaigns/:id/verify — verify payment and trigger sending
 campaignRoutes.post("/:id/verify", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
     const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = await c.req.json();
@@ -271,19 +255,14 @@ campaignRoutes.post("/:id/verify", async (c) => {
       return c.json({ error: "Invalid payment signature" }, 400);
     }
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
-
     const campaign = await prisma.campaign.findFirst({
-      where: { id, restaurantId: restaurant.id, razorpayOrderId: razorpay_order_id },
+      where: { id, restaurantId, razorpayOrderId: razorpay_order_id },
     });
     if (!campaign) return c.json({ error: "Campaign not found" }, 404);
 
     // Get all customers
     const customers = await prisma.customer.findMany({
-      where: { restaurantId: restaurant.id },
+      where: { restaurantId },
       select: { id: true },
     });
 

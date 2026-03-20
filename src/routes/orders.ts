@@ -14,12 +14,8 @@ ordersRoutes.use("*", ownerAuth, subscriptionGuard);
 // GET /orders
 ordersRoutes.get("/", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const status = c.req.query("status");
     const staffId = c.req.query("staffId");
@@ -41,7 +37,7 @@ ordersRoutes.get("/", async (c) => {
     }
 
     const baseWhere = {
-      restaurantId: restaurant.id,
+      restaurantId,
       ...(staffId ? { staffId } : {}),
       ...(customerPhone ? { customerPhone } : {}),
       ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
@@ -109,23 +105,20 @@ ordersRoutes.get("/", async (c) => {
 // GET /orders/:id
 ordersRoutes.get("/:id", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
     // Lean detail query — only what the drawer UI needs
     const order = await prisma.order.findUnique({
       where: { id },
-      select: {
-        ...orderDetailSelect,
-        restaurant: { select: { userId: true } },
-      },
+      select: orderDetailSelect,
     });
-    if (!order || order.restaurant.userId !== userId) {
+    if (!order || order.restaurantId !== restaurantId) {
       return c.json({ error: "Not found" }, 404);
     }
 
-    const { restaurant: _r, ...orderData } = order;
-    return c.json(orderData);
+    return c.json(order);
   } catch {
     return c.json({ error: "Server error" }, 500);
   }
@@ -134,16 +127,12 @@ ordersRoutes.get("/:id", async (c) => {
 // PATCH /orders/:id
 ordersRoutes.patch("/:id", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
-
     const existing = await prisma.order.findUnique({ where: { id } });
-    if (!existing || existing.restaurantId !== restaurant.id) {
+    if (!existing || existing.restaurantId !== restaurantId) {
       return c.json({ error: "Not found" }, 404);
     }
 

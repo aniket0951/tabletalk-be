@@ -10,19 +10,15 @@ customersRoutes.use("*", ownerAuth);
 // GET /customers
 customersRoutes.get("/", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(c.req.query("limit") || "20", 10)));
     const search = c.req.query("search")?.trim() || "";
 
     const where = {
-      restaurantId: restaurant.id,
+      restaurantId: restaurantId,
       ...(search
         ? { OR: [{ name: { contains: search, mode: "insensitive" as const } }, { phone: { contains: search } }] }
         : {}),
@@ -37,7 +33,7 @@ customersRoutes.get("/", async (c) => {
       }),
       prisma.customer.count({ where }),
       prisma.customer.aggregate({
-        where: { restaurantId: restaurant.id },
+        where: { restaurantId: restaurantId },
         _count: true,
         _sum: { totalSpent: true },
       }),
@@ -47,7 +43,7 @@ customersRoutes.get("/", async (c) => {
     const totalRevenue = statsAgg._sum.totalSpent || 0;
     const avgSpendPerCustomer = totalCustomers ? Math.round(totalRevenue / totalCustomers) : 0;
     const repeatCustomers = await prisma.customer.count({
-      where: { restaurantId: restaurant.id, visitCount: { gt: 1 } },
+      where: { restaurantId: restaurantId, visitCount: { gt: 1 } },
     });
 
     return c.json({

@@ -4,6 +4,7 @@ export type Env = {
   Variables: {
     userId: string;
     email: string;
+    restaurantId: string;
     staff: StaffJwtPayload;
   };
 };

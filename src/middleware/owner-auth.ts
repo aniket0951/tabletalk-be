@@ -16,5 +16,6 @@ export const ownerAuth = createMiddleware<Env>(async (c, next) => {
 
   c.set("userId", payload.userId);
   c.set("email", payload.email);
+  if (payload.restaurantId) c.set("restaurantId", payload.restaurantId);
   await next();
 });

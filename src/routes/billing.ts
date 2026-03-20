@@ -27,15 +27,10 @@ protectedRoutes.use("*", ownerAuth);
 // GET /billing/subscription — get current subscription
 protectedRoutes.get("/subscription", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
-
-    const subscription = await getLatestSubscription(restaurant.id);
+    const subscription = await getLatestSubscription(restaurantId);
     if (!subscription) return c.json({ error: "No subscription" }, 404);
 
     const daysRemaining = subscription.endDate
@@ -57,13 +52,9 @@ protectedRoutes.get("/subscription", async (c) => {
 // POST /billing/subscription — create trial subscription (no payment)
 protectedRoutes.post("/subscription", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const { plan } = await c.req.json();
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
 
     const validPlans = ["STARTER", "GROWTH", "MULTI"];
     if (!validPlans.includes(plan)) {
@@ -71,7 +62,7 @@ protectedRoutes.post("/subscription", async (c) => {
     }
 
     // Check if there's already an active/trial subscription
-    const existing = await getLatestSubscription(restaurant.id);
+    const existing = await getLatestSubscription(restaurantId);
     if (existing && ["TRIAL", "ACTIVE"].includes(existing.status)) {
       return c.json({ error: "Active subscription already exists" }, 400);
     }
@@ -85,7 +76,7 @@ protectedRoutes.post("/subscription", async (c) => {
         status: "TRIAL",
         startDate: new Date(),
         endDate,
-        restaurantId: restaurant.id,
+        restaurantId,
       },
     });
 
@@ -99,7 +90,8 @@ protectedRoutes.post("/subscription", async (c) => {
 // POST /billing/checkout — create Razorpay order for one-time payment
 protectedRoutes.post("/checkout", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const { plan } = await c.req.json();
 
     const validPlans = ["STARTER", "GROWTH", "MULTI"] as const;
@@ -107,8 +99,8 @@ protectedRoutes.post("/checkout", async (c) => {
       return c.json({ error: "Invalid plan" }, 400);
     }
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
       include: { user: true },
     });
     if (!restaurant) return c.json({ error: "No restaurant" }, 404);
@@ -121,8 +113,8 @@ protectedRoutes.post("/checkout", async (c) => {
       currency: "INR",
       receipt: `rcpt_${Date.now()}`,
       notes: {
-        restaurant_id: restaurant.id,
-        user_id: userId,
+        restaurant_id: restaurantId,
+        user_id: c.get("userId"),
         plan,
       },
     });
@@ -137,7 +129,7 @@ protectedRoutes.post("/checkout", async (c) => {
         status: "PENDING",
         startDate: new Date(),
         endDate,
-        restaurantId: restaurant.id,
+        restaurantId,
         razorpaySubscriptionId: rzpOrder.id, // storing order ID here
       },
     });
@@ -233,14 +225,10 @@ protectedRoutes.post("/verify", async (c) => {
 // POST /billing/cancel — cancel subscription
 protectedRoutes.post("/cancel", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
-
-    const subscription = await getLatestSubscription(restaurant.id);
+    const subscription = await getLatestSubscription(restaurantId);
     if (!subscription) return c.json({ error: "No subscription" }, 404);
 
     if (!["ACTIVE", "TRIAL"].includes(subscription.status)) {
@@ -265,16 +253,12 @@ protectedRoutes.post("/cancel", async (c) => {
 // GET /billing/invoices — list invoices
 protectedRoutes.get("/invoices", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const invoices = await prisma.invoice.findMany({
       where: {
-        subscription: { restaurantId: restaurant.id, isDeleted: false },
+        subscription: { restaurantId, isDeleted: false },
         isDeleted: false,
       },
       orderBy: { createdAt: "desc" },

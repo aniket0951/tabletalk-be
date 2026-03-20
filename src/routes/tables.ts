@@ -12,15 +12,11 @@ tablesRoutes.use("*", ownerAuth, subscriptionGuard);
 // GET /tables
 tablesRoutes.get("/", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const tables = await prisma.diningTable.findMany({
-      where: { restaurantId: restaurant.id },
+      where: { restaurantId },
       orderBy: { tableNumber: "asc" },
     });
 
@@ -33,18 +29,14 @@ tablesRoutes.get("/", async (c) => {
 // POST /tables
 tablesRoutes.post("/", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const { label, capacity } = await c.req.json();
     if (!label) return c.json({ error: "Missing label" }, 400);
 
     const maxTable = await prisma.diningTable.findFirst({
-      where: { restaurantId: restaurant.id },
+      where: { restaurantId },
       orderBy: { tableNumber: "desc" },
     });
 
@@ -53,7 +45,7 @@ tablesRoutes.post("/", async (c) => {
         tableNumber: (maxTable?.tableNumber || 0) + 1,
         label,
         capacity: capacity || 4,
-        restaurantId: restaurant.id,
+        restaurantId,
       },
     });
 
@@ -67,16 +59,12 @@ tablesRoutes.post("/", async (c) => {
 // PATCH /tables/:id
 tablesRoutes.patch("/:id", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
-
     const existing = await prisma.diningTable.findUnique({ where: { id } });
-    if (!existing || existing.restaurantId !== restaurant.id) {
+    if (!existing || existing.restaurantId !== restaurantId) {
       return c.json({ error: "Not found" }, 404);
     }
 
@@ -115,16 +103,12 @@ tablesRoutes.patch("/:id", async (c) => {
 // DELETE /tables/:id
 tablesRoutes.delete("/:id", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
-
     const table = await prisma.diningTable.findUnique({ where: { id } });
-    if (!table || table.restaurantId !== restaurant.id) {
+    if (!table || table.restaurantId !== restaurantId) {
       return c.json({ error: "Not found" }, 404);
     }
     if (table.status === "OCCUPIED") {

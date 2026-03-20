@@ -12,15 +12,11 @@ menuRoutes.use("*", ownerAuth, subscriptionGuard);
 // GET /menu/items
 menuRoutes.get("/items", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const categories = await prisma.menuCategory.findMany({
-      where: { restaurantId: restaurant.id },
+      where: { restaurantId },
       include: { items: true },
       orderBy: { sortOrder: "asc" },
     });
@@ -34,12 +30,8 @@ menuRoutes.get("/items", async (c) => {
 // POST /menu/items
 menuRoutes.post("/items", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const { name, description, price, type, categoryId } = await c.req.json();
 
@@ -48,12 +40,12 @@ menuRoutes.post("/items", async (c) => {
     }
 
     const category = await prisma.menuCategory.findFirst({
-      where: { id: categoryId, restaurantId: restaurant.id },
+      where: { id: categoryId, restaurantId },
     });
     if (!category) return c.json({ error: "Category not found" }, 404);
 
     const item = await prisma.menuItem.create({
-      data: { name, description: description || "", price, type: type || "VEG", categoryId, restaurantId: restaurant.id },
+      data: { name, description: description || "", price, type: type || "VEG", categoryId, restaurantId },
     });
 
     emitSocketEvent("menu:updated", item);
@@ -67,19 +59,15 @@ menuRoutes.post("/items", async (c) => {
 // PATCH /menu/items/:id
 menuRoutes.patch("/items/:id", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
 
     const existing = await prisma.menuItem.findUnique({
       where: { id },
       include: { category: true },
     });
-    if (!existing || existing.category.restaurantId !== restaurant.id) {
+    if (!existing || existing.category.restaurantId !== restaurantId) {
       return c.json({ error: "Not found" }, 404);
     }
 
@@ -119,19 +107,15 @@ menuRoutes.patch("/items/:id", async (c) => {
 // DELETE /menu/items/:id
 menuRoutes.delete("/items/:id", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
 
     const existing = await prisma.menuItem.findUnique({
       where: { id },
       include: { category: true },
     });
-    if (!existing || existing.category.restaurantId !== restaurant.id) {
+    if (!existing || existing.category.restaurantId !== restaurantId) {
       return c.json({ error: "Not found" }, 404);
     }
 
@@ -146,12 +130,8 @@ menuRoutes.delete("/items/:id", async (c) => {
 // POST /menu/categories
 menuRoutes.post("/categories", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const { name, emoji } = await c.req.json();
     if (!name?.trim()) {
@@ -159,7 +139,7 @@ menuRoutes.post("/categories", async (c) => {
     }
 
     const maxSort = await prisma.menuCategory.findFirst({
-      where: { restaurantId: restaurant.id },
+      where: { restaurantId },
       orderBy: { sortOrder: "desc" },
     });
 
@@ -168,7 +148,7 @@ menuRoutes.post("/categories", async (c) => {
         name: name.trim(),
         emoji: emoji || "\uD83C\uDF7D",
         sortOrder: (maxSort?.sortOrder ?? -1) + 1,
-        restaurantId: restaurant.id,
+        restaurantId,
       },
     });
 
@@ -182,15 +162,11 @@ menuRoutes.post("/categories", async (c) => {
 // POST /menu/categories/defaults
 menuRoutes.post("/categories/defaults", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const existing = await prisma.menuCategory.count({
-      where: { restaurantId: restaurant.id },
+      where: { restaurantId },
     });
     if (existing > 0) {
       return c.json({ error: "Categories already exist" }, 409);
@@ -205,7 +181,7 @@ menuRoutes.post("/categories/defaults", async (c) => {
     await prisma.menuCategory.createMany({
       data: defaultCategories.map((cat) => ({
         ...cat,
-        restaurantId: restaurant.id,
+        restaurantId,
       })),
     });
 

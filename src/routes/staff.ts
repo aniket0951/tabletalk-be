@@ -13,15 +13,11 @@ staffRoutes.use("*", ownerAuth, subscriptionGuard);
 // GET /staff
 staffRoutes.get("/", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const staff = await prisma.staff.findMany({
-      where: { restaurantId: restaurant.id, isDeleted: false },
+      where: { restaurantId, isDeleted: false },
       orderBy: { createdAt: "asc" },
       select: { id: true, employeeId: true, name: true, phone: true, role: true, restaurantId: true, createdAt: true },
     });
@@ -35,12 +31,8 @@ staffRoutes.get("/", async (c) => {
 // POST /staff
 staffRoutes.post("/", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const { name, phone, pin, role } = await c.req.json();
     if (!name || !pin) {
@@ -52,7 +44,7 @@ staffRoutes.post("/", async (c) => {
 
     // Check PIN uniqueness by comparing hashes
     const allStaff = await prisma.staff.findMany({
-      where: { restaurantId: restaurant.id, isDeleted: false },
+      where: { restaurantId, isDeleted: false },
     });
     for (const s of allStaff) {
       if (await compare(pin, s.pin)) {
@@ -63,7 +55,7 @@ staffRoutes.post("/", async (c) => {
     const pinHash = await hash(pin, 10);
 
     const lastStaff = await prisma.staff.findFirst({
-      where: { restaurantId: restaurant.id },
+      where: { restaurantId },
       orderBy: { createdAt: "desc" },
     });
     let nextNum = 1;
@@ -80,7 +72,7 @@ staffRoutes.post("/", async (c) => {
         phone: phone || "",
         pin: pinHash,
         role: role || "WAITER",
-        restaurantId: restaurant.id,
+        restaurantId,
       },
     });
 
@@ -94,16 +86,12 @@ staffRoutes.post("/", async (c) => {
 // PATCH /staff/:id
 staffRoutes.patch("/:id", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
-
     const existing = await prisma.staff.findUnique({ where: { id } });
-    if (!existing || existing.restaurantId !== restaurant.id || existing.isDeleted) {
+    if (!existing || existing.restaurantId !== restaurantId || existing.isDeleted) {
       return c.json({ error: "Not found" }, 404);
     }
 
@@ -115,7 +103,7 @@ staffRoutes.patch("/:id", async (c) => {
       }
       // Check uniqueness against other staff by comparing hashes
       const otherStaff = await prisma.staff.findMany({
-        where: { restaurantId: restaurant.id, isDeleted: false, id: { not: id } },
+        where: { restaurantId, isDeleted: false, id: { not: id } },
       });
       for (const s of otherStaff) {
         if (await compare(pin, s.pin)) {
@@ -150,16 +138,12 @@ staffRoutes.patch("/:id", async (c) => {
 // DELETE /staff/:id
 staffRoutes.delete("/:id", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
-
     const staff = await prisma.staff.findUnique({ where: { id } });
-    if (!staff || staff.restaurantId !== restaurant.id || staff.isDeleted) {
+    if (!staff || staff.restaurantId !== restaurantId || staff.isDeleted) {
       return c.json({ error: "Not found" }, 404);
     }
 

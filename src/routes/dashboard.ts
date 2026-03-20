@@ -10,15 +10,11 @@ dashboardRoutes.use("*", ownerAuth);
 // GET /dashboard/stats
 dashboardRoutes.get("/stats", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const allOrders = await prisma.order.findMany({
-      where: { restaurantId: restaurant.id },
+      where: { restaurantId },
     });
 
     const revenue = allOrders.reduce((sum: number, o: { total: number }) => sum + o.total, 0);
@@ -26,11 +22,11 @@ dashboardRoutes.get("/stats", async (c) => {
     const avgValue = count > 0 ? Math.round(revenue / count) : 0;
 
     const activeTables = await prisma.diningTable.count({
-      where: { restaurantId: restaurant.id, status: "OCCUPIED" },
+      where: { restaurantId: restaurantId, status: "OCCUPIED" },
     });
 
     const totalTables = await prisma.diningTable.count({
-      where: { restaurantId: restaurant.id, active: true },
+      where: { restaurantId: restaurantId, active: true },
     });
 
     const weekStart = new Date();
@@ -39,7 +35,7 @@ dashboardRoutes.get("/stats", async (c) => {
 
     const weekOrders = await prisma.order.findMany({
       where: {
-        restaurantId: restaurant.id,
+        restaurantId: restaurantId,
         placedAt: { gte: weekStart },
       },
       select: { placedAt: true, total: true },
@@ -63,7 +59,7 @@ dashboardRoutes.get("/stats", async (c) => {
 
     const allOrderItems = await prisma.orderItem.findMany({
       where: {
-        order: { restaurantId: restaurant.id },
+        order: { restaurantId: restaurantId },
       },
       include: { menuItem: { select: { name: true } } },
     });

@@ -43,7 +43,8 @@ authRoutes.post("/register", rateLimit(5, 15 * 60 * 1000), async (c) => {
       data: { id: `usr_${createId()}`, name, email, passwordHash },
     });
 
-    const token = await createOwnerToken({ userId: user.id, email: user.email });
+    // New user — no restaurant yet
+    const token = await createOwnerToken({ userId: user.id, email: user.email, restaurantId: null });
 
     return c.json({
       token,
@@ -76,7 +77,13 @@ authRoutes.post("/login", rateLimit(10, 15 * 60 * 1000), async (c) => {
       return c.json({ error: "Invalid credentials" }, 401);
     }
 
-    const token = await createOwnerToken({ userId: user.id, email: user.email });
+    // Find restaurant for this user (may not exist yet for new users)
+    const restaurant = await prisma.restaurant.findFirst({
+      where: { userId: user.id, isDeleted: false },
+      select: { id: true },
+    });
+
+    const token = await createOwnerToken({ userId: user.id, email: user.email, restaurantId: restaurant?.id || null });
 
     return c.json({
       token,

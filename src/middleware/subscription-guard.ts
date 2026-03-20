@@ -3,18 +3,13 @@ import { prisma } from "../lib/prisma";
 import type { Env } from "../types";
 
 export const subscriptionGuard = createMiddleware<Env>(async (c, next) => {
-  const userId = c.get("userId");
-
-  const restaurant = await prisma.restaurant.findFirst({
-    where: { userId, isDeleted: false },
-  });
-
-  if (!restaurant) {
+  const restaurantId = c.get("restaurantId");
+  if (!restaurantId) {
     return c.json({ error: "No restaurant found" }, 404);
   }
 
   const subscription = await prisma.subscription.findFirst({
-    where: { restaurantId: restaurant.id, isDeleted: false },
+    where: { restaurantId, isDeleted: false },
     orderBy: { createdAt: "desc" },
   });
 

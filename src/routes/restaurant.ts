@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
+import { createOwnerToken } from "../lib/jwt";
 import type { Env } from "../types";
 
 export const restaurantRoutes = new Hono<Env>();
@@ -10,17 +11,18 @@ restaurantRoutes.use("*", ownerAuth);
 // GET /restaurant
 restaurantRoutes.get("/", async (c) => {
   try {
-    const userId = c.get("userId");
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
       include: { _count: { select: { tables: true } } },
     });
 
     if (!restaurant) return c.json({ error: "No restaurant" }, 404);
 
     return c.json({
-      id: restaurant.id,
+      id: restaurantId,
       name: restaurant.name,
       phone: restaurant.phone,
       city: restaurant.city,
@@ -38,12 +40,8 @@ restaurantRoutes.get("/", async (c) => {
 // PATCH /restaurant
 restaurantRoutes.patch("/", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const body = await c.req.json();
     const data: Record<string, unknown> = {};
@@ -59,7 +57,7 @@ restaurantRoutes.patch("/", async (c) => {
     }
 
     const updated = await prisma.restaurant.update({
-      where: { id: restaurant.id },
+      where: { id: restaurantId },
       data,
     });
 
@@ -97,7 +95,11 @@ restaurantRoutes.post("/", async (c) => {
       },
     });
 
-    return c.json({ id: restaurant.id, name: restaurant.name });
+    // Re-issue token with restaurantId so subsequent requests don't need DB lookup
+    const email = c.get("email");
+    const newToken = await createOwnerToken({ userId, email, restaurantId: restaurant.id });
+
+    return c.json({ id: restaurant.id, name: restaurant.name, token: newToken });
   } catch (error) {
     console.log("Create Restaurant Error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -108,12 +110,8 @@ restaurantRoutes.post("/", async (c) => {
 // POST /restaurant/code
 restaurantRoutes.post("/code", async (c) => {
   try {
-    const userId = c.get("userId");
-
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { userId, isDeleted: false },
-    });
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    const restaurantId = c.get("restaurantId");
+    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     function generateCode(): string {
@@ -129,13 +127,13 @@ restaurantRoutes.post("/code", async (c) => {
     let attempts = 0;
     while (attempts < 10) {
       const existing = await prisma.restaurant.findFirst({ where: { restaurantCode: code } });
-      if (!existing || existing.id === restaurant.id) break;
+      if (!existing || existing.id === restaurantId) break;
       code = generateCode();
       attempts++;
     }
 
     const updated = await prisma.restaurant.update({
-      where: { id: restaurant.id },
+      where: { id: restaurantId },
       data: { restaurantCode: code },
     });
 

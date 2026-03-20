@@ -8,6 +8,7 @@ const SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 export interface OwnerJwtPayload {
   userId: string;
   email: string;
+  restaurantId: string | null;
 }
 
 export async function createOwnerToken(payload: OwnerJwtPayload): Promise<string> {
