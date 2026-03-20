@@ -4,7 +4,7 @@ import { ownerAuth } from "../middleware/owner-auth";
 import { subscriptionGuard } from "../middleware/subscription-guard";
 import { emitSocketEvent } from "../lib/socket";
 import { upsertCustomer } from "../lib/customer";
-import { orderListSelect, orderDetailInclude } from "../lib/order-select";
+import { orderListSelect, orderDetailSelect, orderDetailInclude } from "../lib/order-select";
 import type { Env } from "../types";
 
 export const ordersRoutes = new Hono<Env>();
@@ -112,11 +112,11 @@ ordersRoutes.get("/:id", async (c) => {
     const userId = c.get("userId");
     const id = c.req.param("id");
 
-    // Single query: find order and verify ownership via restaurant.userId
+    // Lean detail query — only what the drawer UI needs
     const order = await prisma.order.findUnique({
       where: { id },
-      include: {
-        ...orderDetailInclude,
+      select: {
+        ...orderDetailSelect,
         restaurant: { select: { userId: true } },
       },
     });
