@@ -82,6 +82,10 @@ staffOrdersRoutes.patch("/:id", async (c) => {
     if (timestampMap[status]) {
       updateData[timestampMap[status]] = new Date();
     }
+    // Auto-set confirmedAt when moving to COOKING (if not already set)
+    if (status === "COOKING" && !existing.confirmedAt) {
+      updateData.confirmedAt = new Date();
+    }
 
     // Full update for socket broadcast (dashboard/customer needs full data)
     const fullOrder = await prisma.order.update({

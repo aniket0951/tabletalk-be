@@ -152,6 +152,10 @@ ordersRoutes.patch("/:id", async (c) => {
       if (timestampMap[body.status]) {
         updateData[timestampMap[body.status]] = new Date();
       }
+      // Auto-set confirmedAt when moving to COOKING (if not already set)
+      if (body.status === "COOKING" && !existing.confirmedAt) {
+        updateData.confirmedAt = new Date();
+      }
     }
 
     if (body.staffId !== undefined) {
