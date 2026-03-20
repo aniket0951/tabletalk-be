@@ -96,8 +96,7 @@ userRoutes.delete("/delete", async (c) => {
     });
 
     return c.json({ success: true });
-  } catch (error) {
-    console.log("Delete Account Error:", error);
+  } catch {
     return c.json({ error: "Server error" }, 500);
   }
 });

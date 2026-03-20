@@ -231,8 +231,7 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
     emitSocketEvent("table:updated", { ...table, status: "OCCUPIED" });
 
     return c.json(order, 201);
-  } catch (error) {
-    console.error("[POST /public/orders] error:", error);
+  } catch {
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -419,8 +418,7 @@ publicRoutes.post("/ratings", async (c) => {
     });
 
     return c.json({ success: true, message: "Ratings submitted" });
-  } catch (error) {
-    console.error("[POST /public/ratings] error:", error);
+  } catch {
     return c.json({ error: "Server error" }, 500);
   }
 });

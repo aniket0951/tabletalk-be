@@ -102,7 +102,6 @@ restaurantRoutes.post("/", async (c) => {
 
     return c.json({ id: restaurant.id, name: restaurant.name, token: newToken });
   } catch (error) {
-    console.log("Create Restaurant Error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return c.json({ error: "Server error", detail: message }, 500);
   }

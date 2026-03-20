@@ -115,8 +115,7 @@ menuRoutes.post("/items", async (c) => {
 
     emitSocketEvent("menu:updated", item);
     return c.json(item);
-  } catch (error) {
-    console.log("Menu Item POST Error:", error);
+  } catch {
     return c.json({ error: "Server error" }, 500);
   }
 });

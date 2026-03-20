@@ -13,7 +13,6 @@ export function getIO(): Server {
 
 export function emitSocketEvent(event: string, data: unknown): void {
   if (!io) {
-    console.warn("[socket] IO not initialized, skipping emit:", event);
     return;
   }
   io.emit(event, data);

@@ -82,8 +82,7 @@ protectedRoutes.post("/subscription", async (c) => {
     });
 
     return c.json(subscription);
-  } catch (error) {
-    console.log("Subscription Error:", error);
+  } catch {
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -145,7 +144,6 @@ protectedRoutes.post("/checkout", async (c) => {
       email: restaurant.user.email,
     });
   } catch (error: any) {
-    console.log("Checkout Error:", error);
     const detail = error?.error?.description || error?.message || String(error);
     return c.json({ error: "Server error", detail }, 500);
   }
@@ -217,8 +215,7 @@ protectedRoutes.post("/verify", async (c) => {
     });
 
     return c.json({ success: true, subscription: updated });
-  } catch (error) {
-    console.log("Verify Error:", error);
+  } catch {
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -245,8 +242,7 @@ protectedRoutes.post("/cancel", async (c) => {
     });
 
     return c.json({ success: true, subscription: updated });
-  } catch (error) {
-    console.log("Cancel Error:", error);
+  } catch {
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -344,8 +340,7 @@ webhookRoutes.post("/webhook", async (c) => {
     });
 
     return c.json({ status: "ok" });
-  } catch (error) {
-    console.log("Webhook Error:", error);
+  } catch {
     return c.json({ error: "Server error" }, 500);
   }
 });

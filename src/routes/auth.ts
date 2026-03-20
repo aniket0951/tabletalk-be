@@ -51,8 +51,7 @@ authRoutes.post("/register", rateLimit(5, 15 * 60 * 1000), async (c) => {
       token,
       user: { id: user.id, name: user.name, email: user.email },
     });
-  } catch (error) {
-    console.log("Register Error:", error);
+  } catch {
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -90,8 +89,7 @@ authRoutes.post("/login", rateLimit(10, 15 * 60 * 1000), async (c) => {
       token,
       user: { id: user.id, name: user.name, email: user.email },
     });
-  } catch (error) {
-    console.log("Login Error:", error);
+  } catch {
     return c.json({ error: "Server error" }, 500);
   }
 });

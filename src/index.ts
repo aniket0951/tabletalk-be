@@ -23,10 +23,6 @@ import { billingRoutes } from "./routes/billing";
 import { userRoutes } from "./routes/user";
 import { publicRoutes } from "./routes/public";
 import { campaignRoutes } from "./routes/campaigns";
-// Debug: log env vars at startup
-console.log("[env] DATABASE_URL:", process.env.DATABASE_URL ? "SET" : "NOT SET");
-console.log("[env] JWT_SECRET:", process.env.JWT_SECRET ? "SET" : "NOT SET");
-console.log("[env] PORT:", process.env.PORT);
 
 const app = new Hono<Env>();
 
@@ -126,9 +122,7 @@ io.use(async (socket, next) => {
 });
 
 io.on("connection", (socket) => {
-  console.log(`[socket] ${socket.data.role} connected: ${socket.id}`);
   socket.on("disconnect", () => {
-    console.log(`[socket] ${socket.data.role} disconnected: ${socket.id}`);
   });
 });
 
@@ -136,8 +130,6 @@ io.on("connection", (socket) => {
 setInterval(async () => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    console.log("[keep-alive] DB ping OK");
-  } catch (err) {
-    console.error("[keep-alive] DB ping failed:", err);
+  } catch {
   }
 }, 5 * 60 * 1000);

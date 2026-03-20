@@ -24,7 +24,10 @@ campaignRoutes.get("/", async (c) => {
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
-    const limit = Math.min(50, Math.max(1, parseInt(c.req.query("limit") || "20", 10)));
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(c.req.query("limit") || "20", 10)),
+    );
 
     const where = { restaurantId };
 
@@ -45,18 +48,34 @@ campaignRoutes.get("/", async (c) => {
 
     // Get delivery counts grouped by status for these campaigns (single query)
     const campaignIds = campaigns.map((c) => c.id);
-    const deliveryCounts = campaignIds.length > 0
-      ? await prisma.campaignDelivery.groupBy({
-          by: ["campaignId", "status"],
-          where: { campaignId: { in: campaignIds } },
-          _count: true,
-        })
-      : [];
+    const deliveryCounts =
+      campaignIds.length > 0
+        ? await prisma.campaignDelivery.groupBy({
+            by: ["campaignId", "status"],
+            where: { campaignId: { in: campaignIds } },
+            _count: true,
+          })
+        : [];
 
     // Build stats map per campaign
-    const statsMap = new Map<string, { sent: number; delivered: number; failed: number; pending: number; total: number }>();
+    const statsMap = new Map<
+      string,
+      {
+        sent: number;
+        delivered: number;
+        failed: number;
+        pending: number;
+        total: number;
+      }
+    >();
     for (const row of deliveryCounts) {
-      const existing = statsMap.get(row.campaignId) || { sent: 0, delivered: 0, failed: 0, pending: 0, total: 0 };
+      const existing = statsMap.get(row.campaignId) || {
+        sent: 0,
+        delivered: 0,
+        failed: 0,
+        pending: 0,
+        total: 0,
+      };
       existing.total += row._count;
       if (row.status === "SENT") existing.sent = row._count;
       else if (row.status === "DELIVERED") existing.delivered = row._count;
@@ -67,7 +86,13 @@ campaignRoutes.get("/", async (c) => {
 
     const result = campaigns.map((c) => ({
       ...c,
-      stats: statsMap.get(c.id) || { sent: 0, delivered: 0, failed: 0, pending: 0, total: 0 },
+      stats: statsMap.get(c.id) || {
+        sent: 0,
+        delivered: 0,
+        failed: 0,
+        pending: 0,
+        total: 0,
+      },
     }));
 
     const stats = {
@@ -82,7 +107,6 @@ campaignRoutes.get("/", async (c) => {
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (error) {
-    console.error("[GET /campaigns] error:", error);
     return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
   }
 });
@@ -98,7 +122,12 @@ campaignRoutes.get("/:id", async (c) => {
       where: { id, restaurantId },
       include: {
         deliveries: {
-          select: { status: true, channel: true, sentAt: true, deliveredAt: true },
+          select: {
+            status: true,
+            channel: true,
+            sentAt: true,
+            deliveredAt: true,
+          },
         },
       },
     });
@@ -107,10 +136,12 @@ campaignRoutes.get("/:id", async (c) => {
 
     const stats = {
       sent: campaign.deliveries.filter((d) => d.status === "SENT").length,
-      delivered: campaign.deliveries.filter((d) => d.status === "DELIVERED").length,
+      delivered: campaign.deliveries.filter((d) => d.status === "DELIVERED")
+        .length,
       failed: campaign.deliveries.filter((d) => d.status === "FAILED").length,
       pending: campaign.deliveries.filter((d) => d.status === "PENDING").length,
-      whatsapp: campaign.deliveries.filter((d) => d.channel === "WHATSAPP").length,
+      whatsapp: campaign.deliveries.filter((d) => d.channel === "WHATSAPP")
+        .length,
       sms: campaign.deliveries.filter((d) => d.channel === "SMS").length,
       total: campaign.deliveries.length,
     };
@@ -118,7 +149,6 @@ campaignRoutes.get("/:id", async (c) => {
     const { deliveries: _, ...campaignData } = campaign;
     return c.json({ ...campaignData, stats });
   } catch (error) {
-    console.error("[GET /campaigns/:id] error:", error);
     return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
   }
 });
@@ -139,7 +169,6 @@ campaignRoutes.post("/", async (c) => {
     const audienceCount = await prisma.customer.count({
       where: { restaurantId },
     });
-    console.log(`[POST /campaigns] restaurantId=${restaurantId}, audienceCount=${audienceCount}`);
 
     if (audienceCount === 0) {
       return c.json({ error: "No customers to target" }, 400);
@@ -164,7 +193,6 @@ campaignRoutes.post("/", async (c) => {
 
     return c.json(campaign, 201);
   } catch (error) {
-    console.error("[POST /campaigns] error:", error);
     return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
   }
 });
@@ -179,13 +207,13 @@ campaignRoutes.delete("/:id", async (c) => {
     const campaign = await prisma.campaign.findFirst({
       where: { id, restaurantId, status: { in: ["DRAFT", "PAYING"] } },
     });
-    if (!campaign) return c.json({ error: "Campaign not found or cannot be deleted" }, 404);
+    if (!campaign)
+      return c.json({ error: "Campaign not found or cannot be deleted" }, 404);
 
     await prisma.campaign.delete({ where: { id: campaign.id } });
 
     return c.json({ success: true });
   } catch (error) {
-    console.error("[DELETE /campaigns/:id] error:", error);
     return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
   }
 });
@@ -200,12 +228,11 @@ campaignRoutes.post("/:id/checkout", async (c) => {
     const campaign = await prisma.campaign.findFirst({
       where: { id, restaurantId, status: { in: ["DRAFT", "PAYING"] } },
     });
-    if (!campaign) return c.json({ error: "Campaign not found or already paid" }, 404);
+    if (!campaign)
+      return c.json({ error: "Campaign not found or already paid" }, 404);
 
     // Razorpay minimum order is ₹1 (100 paise)
     const amountInPaise = Math.max(100, Math.round(campaign.totalCost * 100));
-    console.log(`[checkout] campaignId=${campaign.id}, totalCost=${campaign.totalCost}, amountInPaise=${amountInPaise}`);
-
     const rzpOrder = await getRazorpay().orders.create({
       amount: amountInPaise,
       currency: "INR",
@@ -233,7 +260,6 @@ campaignRoutes.post("/:id/checkout", async (c) => {
       email: user?.email || "",
     });
   } catch (error) {
-    console.error("[POST /campaigns/:id/checkout] error:", error);
     return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
   }
 });
@@ -245,13 +271,18 @@ campaignRoutes.post("/:id/verify", async (c) => {
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
-    const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = await c.req.json();
+    const { razorpay_payment_id, razorpay_order_id, razorpay_signature } =
+      await c.req.json();
 
     if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
       return c.json({ error: "Missing payment details" }, 400);
     }
 
-    const isValid = verifyOrderPaymentSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
+    const isValid = verifyOrderPaymentSignature(
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    );
     if (!isValid) {
       return c.json({ error: "Invalid payment signature" }, 400);
     }
@@ -273,7 +304,10 @@ campaignRoutes.post("/:id/verify", async (c) => {
         where: { id: campaign.id },
         data: {
           razorpayPaymentId: razorpay_payment_id,
-          status: campaign.scheduledAt && new Date(campaign.scheduledAt) > new Date() ? "SCHEDULED" : "SENDING",
+          status:
+            campaign.scheduledAt && new Date(campaign.scheduledAt) > new Date()
+              ? "SCHEDULED"
+              : "SENDING",
           sentAt: campaign.scheduledAt ? null : new Date(),
         },
       });
@@ -291,9 +325,11 @@ campaignRoutes.post("/:id/verify", async (c) => {
     // Simulate delivery (Phase 1 — replace with real WhatsApp/SMS later)
     simulateDelivery(campaign.id);
 
-    return c.json({ success: true, message: "Payment verified. Campaign is being sent." });
+    return c.json({
+      success: true,
+      message: "Payment verified. Campaign is being sent.",
+    });
   } catch (error) {
-    console.error("[POST /campaigns/:id/verify] error:", error);
     return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
   }
 });
@@ -314,7 +350,12 @@ async function simulateDelivery(campaignId: string) {
         if (whatsappSuccess) {
           await prisma.campaignDelivery.update({
             where: { id: delivery.id },
-            data: { status: "DELIVERED", channel: "WHATSAPP", sentAt: new Date(), deliveredAt: new Date() },
+            data: {
+              status: "DELIVERED",
+              channel: "WHATSAPP",
+              sentAt: new Date(),
+              deliveredAt: new Date(),
+            },
           });
         } else {
           // SMS fallback — 95% success
@@ -336,8 +377,7 @@ async function simulateDelivery(campaignId: string) {
         where: { id: campaignId },
         data: { status: "COMPLETED", completedAt: new Date() },
       });
-    } catch (error) {
-      console.error("[simulateDelivery] error:", error);
+    } catch {
       await prisma.campaign.update({
         where: { id: campaignId },
         data: { status: "FAILED" },

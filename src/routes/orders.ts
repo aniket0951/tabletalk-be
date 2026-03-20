@@ -97,8 +97,7 @@ ordersRoutes.get("/", async (c) => {
       totalAll,
       pagination: { page, limit, totalFiltered, totalPages: Math.ceil(totalFiltered / limit) },
     });
-  } catch (error) {
-    console.error("[GET /orders] error:", error);
+  } catch {
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -202,8 +201,7 @@ ordersRoutes.patch("/:id", async (c) => {
 
     emitSocketEvent("order:updated", order);
     return c.json(order);
-  } catch (error) {
-    console.error("[PATCH /orders/:id] error:", error);
+  } catch {
     return c.json({ error: "Server error" }, 500);
   }
 });
