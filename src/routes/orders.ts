@@ -5,6 +5,7 @@ import { subscriptionGuard } from "../middleware/subscription-guard";
 import { emitSocketEvent } from "../lib/socket";
 import { upsertCustomer } from "../lib/customer";
 import { orderListSelect, orderDetailSelect, orderDetailInclude } from "../lib/order-select";
+import { CTX } from "../lib/constants";
 import type { Env } from "../types";
 
 export const ordersRoutes = new Hono<Env>();
@@ -14,7 +15,7 @@ ordersRoutes.use("*", ownerAuth, subscriptionGuard);
 // GET /orders
 ordersRoutes.get("/", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const status = c.req.query("status");
@@ -105,7 +106,7 @@ ordersRoutes.get("/", async (c) => {
 // GET /orders/:id
 ordersRoutes.get("/:id", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
@@ -127,7 +128,7 @@ ordersRoutes.get("/:id", async (c) => {
 // PATCH /orders/:id
 ordersRoutes.patch("/:id", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 

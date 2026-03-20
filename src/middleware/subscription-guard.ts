@@ -1,9 +1,10 @@
 import { createMiddleware } from "hono/factory";
 import { prisma } from "../lib/prisma";
+import { CTX } from "../lib/constants";
 import type { Env } from "../types";
 
 export const subscriptionGuard = createMiddleware<Env>(async (c, next) => {
-  const restaurantId = c.get("restaurantId");
+  const restaurantId = c.get(CTX.RESTAURANT_ID);
   if (!restaurantId) {
     return c.json({ error: "No restaurant found" }, 404);
   }

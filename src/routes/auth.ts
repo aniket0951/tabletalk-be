@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { createOwnerToken } from "../lib/jwt";
 import { ownerAuth } from "../middleware/owner-auth";
 import { rateLimit } from "../middleware/rate-limit";
+import { CTX } from "../lib/constants";
 import type { Env } from "../types";
 
 export const authRoutes = new Hono<Env>();
@@ -98,7 +99,7 @@ authRoutes.post("/login", rateLimit(10, 15 * 60 * 1000), async (c) => {
 // GET /auth/me
 authRoutes.get("/me", ownerAuth, async (c) => {
   try {
-    const userId = c.get("userId");
+    const userId = c.get(CTX.USER_ID);
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, name: true, email: true },

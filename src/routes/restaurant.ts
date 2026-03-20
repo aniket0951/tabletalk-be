@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
 import { createOwnerToken } from "../lib/jwt";
+import { CTX } from "../lib/constants";
 import type { Env } from "../types";
 
 export const restaurantRoutes = new Hono<Env>();
@@ -11,7 +12,7 @@ restaurantRoutes.use("*", ownerAuth);
 // GET /restaurant
 restaurantRoutes.get("/", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const restaurant = await prisma.restaurant.findUnique({
@@ -40,7 +41,7 @@ restaurantRoutes.get("/", async (c) => {
 // PATCH /restaurant
 restaurantRoutes.patch("/", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const body = await c.req.json();
@@ -78,7 +79,7 @@ restaurantRoutes.patch("/", async (c) => {
 // POST /restaurant
 restaurantRoutes.post("/", async (c) => {
   try {
-    const userId = c.get("userId");
+    const userId = c.get(CTX.USER_ID);
     const body = await c.req.json();
 
     if (!body.name || !body.phone) {
@@ -96,7 +97,7 @@ restaurantRoutes.post("/", async (c) => {
     });
 
     // Re-issue token with restaurantId so subsequent requests don't need DB lookup
-    const email = c.get("email");
+    const email = c.get(CTX.EMAIL);
     const newToken = await createOwnerToken({ userId, email, restaurantId: restaurant.id });
 
     return c.json({ id: restaurant.id, name: restaurant.name, token: newToken });
@@ -110,7 +111,7 @@ restaurantRoutes.post("/", async (c) => {
 // POST /restaurant/code
 restaurantRoutes.post("/code", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

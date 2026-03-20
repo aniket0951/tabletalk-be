@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
+import { CTX } from "../lib/constants";
 import type { Env } from "../types";
 
 export const customersRoutes = new Hono<Env>();
@@ -10,7 +11,7 @@ customersRoutes.use("*", ownerAuth);
 // GET /customers
 customersRoutes.get("/", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));

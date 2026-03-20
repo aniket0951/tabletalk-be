@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
 import { subscriptionGuard } from "../middleware/subscription-guard";
 import { emitSocketEvent } from "../lib/socket";
+import { CTX } from "../lib/constants";
 import type { Env } from "../types";
 
 export const menuRoutes = new Hono<Env>();
@@ -12,7 +13,7 @@ menuRoutes.use("*", ownerAuth, subscriptionGuard);
 // GET /menu/categories — categories only with item count (for tab view)
 menuRoutes.get("/categories", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const categories = await prisma.menuCategory.findMany({
@@ -76,7 +77,7 @@ menuRoutes.get("/categories/:categoryId/items", async (c) => {
 // GET /menu/items — all categories with items (backward compat)
 menuRoutes.get("/items", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const categories = await prisma.menuCategory.findMany({
@@ -94,7 +95,7 @@ menuRoutes.get("/items", async (c) => {
 // POST /menu/items
 menuRoutes.post("/items", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const { name, description, price, type, categoryId } = await c.req.json();
@@ -123,7 +124,7 @@ menuRoutes.post("/items", async (c) => {
 // PATCH /menu/items/:id
 menuRoutes.patch("/items/:id", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
@@ -171,7 +172,7 @@ menuRoutes.patch("/items/:id", async (c) => {
 // DELETE /menu/items/:id
 menuRoutes.delete("/items/:id", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
@@ -194,7 +195,7 @@ menuRoutes.delete("/items/:id", async (c) => {
 // POST /menu/categories
 menuRoutes.post("/categories", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const { name, emoji } = await c.req.json();
@@ -226,7 +227,7 @@ menuRoutes.post("/categories", async (c) => {
 // POST /menu/categories/defaults
 menuRoutes.post("/categories/defaults", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const existing = await prisma.menuCategory.count({

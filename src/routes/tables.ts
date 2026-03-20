@@ -3,8 +3,8 @@ import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
 import { subscriptionGuard } from "../middleware/subscription-guard";
 import { emitSocketEvent } from "../lib/socket";
+import { CTX } from "../lib/constants";
 import type { Env } from "../types";
-import { CONTEXT_KEYS } from "./constants";
 
 export const tablesRoutes = new Hono<Env>();
 
@@ -13,7 +13,7 @@ tablesRoutes.use("*", ownerAuth, subscriptionGuard);
 // GET /tables
 tablesRoutes.get("/", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const tables = await prisma.diningTable.findMany({
@@ -30,7 +30,7 @@ tablesRoutes.get("/", async (c) => {
 // POST /tables
 tablesRoutes.post("/", async (c) => {
   try {
-    const restaurantId = c.get(CONTEXT_KEYS.RESTAURANT_ID);
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const { label, capacity } = await c.req.json();
@@ -60,7 +60,7 @@ tablesRoutes.post("/", async (c) => {
 // PATCH /tables/:id
 tablesRoutes.patch("/:id", async (c) => {
   try {
-    const restaurantId = c.get(CONTEXT_KEYS.RESTAURANT_ID);
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
@@ -104,7 +104,7 @@ tablesRoutes.patch("/:id", async (c) => {
 // DELETE /tables/:id
 tablesRoutes.delete("/:id", async (c) => {
   try {
-    const restaurantId = c.get(CONTEXT_KEYS.RESTAURANT_ID);
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
 import { getRazorpay, verifyOrderPaymentSignature } from "../lib/razorpay";
+import { CTX } from "../lib/constants";
 import type { Env } from "../types";
 
 export const campaignRoutes = new Hono<Env>();
@@ -19,7 +20,7 @@ function debugMsg(error: unknown): string {
 // GET /campaigns — list campaigns
 campaignRoutes.get("/", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
@@ -89,7 +90,7 @@ campaignRoutes.get("/", async (c) => {
 // GET /campaigns/:id — campaign detail
 campaignRoutes.get("/:id", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
@@ -125,7 +126,7 @@ campaignRoutes.get("/:id", async (c) => {
 // POST /campaigns — create draft campaign
 campaignRoutes.post("/", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const { type, title, message, imageUrl, scheduledAt } = await c.req.json();
@@ -171,7 +172,7 @@ campaignRoutes.post("/", async (c) => {
 // DELETE /campaigns/:id — delete a draft campaign
 campaignRoutes.delete("/:id", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
@@ -192,7 +193,7 @@ campaignRoutes.delete("/:id", async (c) => {
 // POST /campaigns/:id/checkout — create Razorpay order for campaign payment
 campaignRoutes.post("/:id/checkout", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
@@ -220,7 +221,7 @@ campaignRoutes.post("/:id/checkout", async (c) => {
       data: { razorpayOrderId: rzpOrder.id, status: "PAYING" },
     });
 
-    const userId = c.get("userId");
+    const userId = c.get(CTX.USER_ID);
     const user = await prisma.user.findUnique({ where: { id: userId } });
 
     return c.json({
@@ -240,7 +241,7 @@ campaignRoutes.post("/:id/checkout", async (c) => {
 // POST /campaigns/:id/verify — verify payment and trigger sending
 campaignRoutes.post("/:id/verify", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 

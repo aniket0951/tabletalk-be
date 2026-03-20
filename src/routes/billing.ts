@@ -7,6 +7,7 @@ import {
   verifyOrderPaymentSignature,
   verifyWebhookSignature,
 } from "../lib/razorpay";
+import { CTX } from "../lib/constants";
 import type { Env } from "../types";
 
 export const billingRoutes = new Hono<Env>();
@@ -27,7 +28,7 @@ protectedRoutes.use("*", ownerAuth);
 // GET /billing/subscription — get current subscription
 protectedRoutes.get("/subscription", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const subscription = await getLatestSubscription(restaurantId);
@@ -52,7 +53,7 @@ protectedRoutes.get("/subscription", async (c) => {
 // POST /billing/subscription — create trial subscription (no payment)
 protectedRoutes.post("/subscription", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const { plan } = await c.req.json();
 
@@ -90,7 +91,7 @@ protectedRoutes.post("/subscription", async (c) => {
 // POST /billing/checkout — create Razorpay order for one-time payment
 protectedRoutes.post("/checkout", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const { plan } = await c.req.json();
 
@@ -114,7 +115,7 @@ protectedRoutes.post("/checkout", async (c) => {
       receipt: `rcpt_${Date.now()}`,
       notes: {
         restaurant_id: restaurantId,
-        user_id: c.get("userId"),
+        user_id: c.get(CTX.USER_ID),
         plan,
       },
     });
@@ -225,7 +226,7 @@ protectedRoutes.post("/verify", async (c) => {
 // POST /billing/cancel — cancel subscription
 protectedRoutes.post("/cancel", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const subscription = await getLatestSubscription(restaurantId);
@@ -253,7 +254,7 @@ protectedRoutes.post("/cancel", async (c) => {
 // GET /billing/invoices — list invoices
 protectedRoutes.get("/invoices", async (c) => {
   try {
-    const restaurantId = c.get("restaurantId");
+    const restaurantId = c.get(CTX.RESTAURANT_ID);
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const invoices = await prisma.invoice.findMany({

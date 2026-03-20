@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
+import { CTX } from "../lib/constants";
 import type { Env } from "../types";
 
 export const userRoutes = new Hono<Env>();
@@ -10,7 +11,7 @@ userRoutes.use("*", ownerAuth);
 // DELETE /user/delete
 userRoutes.delete("/delete", async (c) => {
   try {
-    const userId = c.get("userId");
+    const userId = c.get(CTX.USER_ID);
 
     const restaurants = await prisma.restaurant.findMany({
       where: { userId, isDeleted: false },
