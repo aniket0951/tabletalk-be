@@ -39,40 +39,41 @@ menuRoutes.get("/categories/:categoryId/items", async (c) => {
     if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const categoryId = c.req.param("categoryId");
 
-    const category = await prisma.menuCategory.findFirst({
-      where: { id: categoryId, restaurantId },
-    });
-    if (!category) return c.json({ error: "Category not found" }, 404);
-
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(c.req.query("limit") || "20", 10)));
 
-    const where = { categoryId, isDeleted: false };
+    // Single query — filter by category + restaurant ownership via relation
+    const where = {
+      categoryId,
+      isDeleted: false,
+      category: { restaurantId },
+    };
 
-    const [items, total] = await Promise.all([
-      prisma.menuItem.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          price: true,
-          type: true,
-          available: true,
-          categoryId: true,
-          averageRating: true,
-          ratingCount: true,
-        },
-        orderBy: { createdAt: "asc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.menuItem.count({ where }),
-    ]);
+    // Fetch limit+1 to check if more exist — avoids separate count query
+    const items = await prisma.menuItem.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        type: true,
+        available: true,
+        categoryId: true,
+        averageRating: true,
+        ratingCount: true,
+      },
+      orderBy: { createdAt: "asc" },
+      skip: (page - 1) * limit,
+      take: limit + 1,
+    });
+
+    const hasMore = items.length > limit;
+    if (hasMore) items.pop();
 
     return c.json({
       items,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit), hasMore: page * limit < total },
+      pagination: { page, limit, hasMore },
     });
   } catch {
     return c.json({ error: "Server error" }, 500);
