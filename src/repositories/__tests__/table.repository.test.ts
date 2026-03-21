@@ -8,7 +8,7 @@ import {
   findByIdFull,
   create,
   update,
-  remove,
+  softDelete,
   findMaxTableNumber,
   countByStatus,
   countActive,
@@ -19,11 +19,11 @@ beforeEach(() => {
 });
 
 describe("findMany", () => {
-  it("finds tables ordered by tableNumber", async () => {
+  it("finds non-deleted tables ordered by tableNumber", async () => {
     prismaMock.diningTable.findMany.mockResolvedValue([]);
     await findMany("rest-1");
     expect(prismaMock.diningTable.findMany).toHaveBeenCalledWith({
-      where: { restaurantId: "rest-1" },
+      where: { restaurantId: "rest-1", isDeleted: false },
       orderBy: { tableNumber: "asc" },
     });
   });
@@ -89,11 +89,14 @@ describe("update", () => {
   });
 });
 
-describe("remove", () => {
-  it("deletes table by id", async () => {
-    prismaMock.diningTable.delete.mockResolvedValue({});
-    await remove("t-1");
-    expect(prismaMock.diningTable.delete).toHaveBeenCalledWith({ where: { id: "t-1" } });
+describe("softDelete", () => {
+  it("sets isDeleted to true", async () => {
+    prismaMock.diningTable.update.mockResolvedValue({});
+    await softDelete("t-1");
+    expect(prismaMock.diningTable.update).toHaveBeenCalledWith({
+      where: { id: "t-1" },
+      data: { isDeleted: true },
+    });
   });
 });
 

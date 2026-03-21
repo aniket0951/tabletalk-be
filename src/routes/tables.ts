@@ -88,18 +88,17 @@ tablesRoutes.patch("/:id", async (c) => {
 // DELETE /tables/:id
 tablesRoutes.delete("/:id", async (c) => {
   try {
-    const restaurantId = c.get(CTX.RESTAURANT_ID);
     const id = c.req.param("id");
 
     const table = await tableRepository.findById(id);
-    if (!table || table.restaurantId !== restaurantId) {
+    if (!table) {
       return c.json({ error: "Not found" }, 404);
     }
     if (table.status === TABLE_STATUS.OCCUPIED) {
       return c.json({ error: "Cannot delete occupied table" }, 400);
     }
 
-    await tableRepository.remove(id);
+    await tableRepository.softDelete(id);
     return c.json({ success: true });
   } catch {
     return c.json({ error: "Server error" }, 500);

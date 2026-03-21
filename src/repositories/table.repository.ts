@@ -3,7 +3,7 @@ import type { TableStatus } from "@prisma/client";
 
 export function findMany(restaurantId: string) {
   return prisma.diningTable.findMany({
-    where: { restaurantId },
+    where: { restaurantId, isDeleted: false },
     orderBy: { tableNumber: "asc" as const },
   });
 }
@@ -34,8 +34,11 @@ export function update(id: string, data: Record<string, unknown>) {
   return prisma.diningTable.update({ where: { id }, data });
 }
 
-export function remove(id: string) {
-  return prisma.diningTable.delete({ where: { id } });
+export function softDelete(id: string) {
+  return prisma.diningTable.update({
+    where: { id },
+    data: { isDeleted: true },
+  });
 }
 
 export function findMaxTableNumber(restaurantId: string) {
@@ -64,7 +67,7 @@ export const tableRepository = {
   findByIdFull,
   create,
   update,
-  remove,
+  softDelete,
   findMaxTableNumber,
   countByStatus,
   countActive,
