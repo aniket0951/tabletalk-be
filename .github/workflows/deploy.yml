@@ -1,0 +1,127 @@
+name: Deploy to Railway
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      confirm_deploy:
+        description: "Type 'deploy' to confirm"
+        required: true
+        type: string
+
+jobs:
+  validate:
+    name: Validate Tests Passed
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Confirm deployment intent
+        if: inputs.confirm_deploy != 'deploy'
+        run: |
+          echo "Deployment not confirmed. You must type 'deploy' to proceed."
+          exit 1
+
+      - name: Check latest test run on this branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.ref.replace('refs/heads/', '');
+            console.log(`Checking test results for branch: ${branch}`);
+
+            // Find the latest "carplus tests" workflow run on this branch
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'tests.yml',
+              branch: branch,
+              status: 'completed',
+              per_page: 1,
+            });
+
+            if (runs.data.workflow_runs.length === 0) {
+              core.setFailed(`No test runs found for branch '${branch}'. Run tests first.`);
+              return;
+            }
+
+            const latestRun = runs.data.workflow_runs[0];
+            console.log(`Latest test run: #${latestRun.run_number} - ${latestRun.conclusion}`);
+            console.log(`Commit: ${latestRun.head_sha}`);
+            console.log(`Current commit: ${context.sha}`);
+
+            if (latestRun.conclusion !== 'success') {
+              core.setFailed(`Latest test run failed (${latestRun.conclusion}). Fix tests before deploying.`);
+              return;
+            }
+
+            if (latestRun.head_sha !== context.sha) {
+              core.setFailed(
+                `Tests passed on commit ${latestRun.head_sha.slice(0, 7)}, but you're deploying commit ${context.sha.slice(0, 7)}. Push and wait for tests to pass first.`
+              );
+              return;
+            }
+
+            console.log('All tests passed on current commit. Proceeding to deploy.');
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: validate
+    if: inputs.environment == 'staging'
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Staging
+        run: railway up --service ${{ vars.RAILWAY_SERVICE_NAME || 'tabletalk-api' }} --environment staging
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Deployment Summary
+        run: |
+          echo "## Staging Deployment Successful"
+          echo "- **Branch:** ${{ github.ref_name }}"
+          echo "- **Commit:** ${{ github.sha }}"
+          echo "- **Triggered by:** ${{ github.actor }}"
+          echo "- **Deployed at:** $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: validate
+    if: inputs.environment == 'production'
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Production
+        run: railway up --service ${{ vars.RAILWAY_SERVICE_NAME || 'tabletalk-api' }} --environment production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Deployment Summary
+        run: |
+          echo "## Production Deployment Successful"
+          echo "- **Branch:** ${{ github.ref_name }}"
+          echo "- **Commit:** ${{ github.sha }}"
+          echo "- **Triggered by:** ${{ github.actor }}"
+          echo "- **Deployed at:** $(date -u +%Y-%m-%dT%H:%M:%SZ)"
