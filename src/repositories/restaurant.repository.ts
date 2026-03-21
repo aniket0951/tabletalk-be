@@ -30,6 +30,10 @@ export function findByCode(code: string) {
   return prisma.restaurant.findFirst({ where: { restaurantCode: code } });
 }
 
+export function findByCodeActive(code: string) {
+  return prisma.restaurant.findFirst({ where: { restaurantCode: code, isDeleted: false } });
+}
+
 export const restaurantRepository = {
   findById,
   findByIdBasic,
@@ -37,4 +41,5 @@ export const restaurantRepository = {
   create,
   update,
   findByCode,
+  findByCodeActive,
 };

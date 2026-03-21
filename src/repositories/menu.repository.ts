@@ -93,6 +93,41 @@ export function seedDefaults(restaurantId: string) {
   });
 }
 
+export function findPublicCategories(restaurantId: string) {
+  return prisma.menuCategory.findMany({
+    where: { restaurantId },
+    select: {
+      id: true,
+      name: true,
+      emoji: true,
+      sortOrder: true,
+      _count: { select: { items: { where: { available: true, isDeleted: false } } } },
+    },
+    orderBy: { sortOrder: "asc" as const },
+  });
+}
+
+export function findAvailableItems(categoryId: string, page: number, limit: number) {
+  return prisma.menuItem.findMany({
+    where: { categoryId, available: true, isDeleted: false },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      price: true,
+      type: true,
+      available: true,
+      categoryId: true,
+      restaurantId: true,
+      averageRating: true,
+      ratingCount: true,
+    },
+    orderBy: { averageRating: "desc" as const },
+    skip: (page - 1) * limit,
+    take: limit,
+  });
+}
+
 export const menuRepository = {
   findCategories,
   findItemsByCategory,
@@ -106,4 +141,6 @@ export const menuRepository = {
   findMaxSortOrder,
   countCategories,
   seedDefaults,
+  findPublicCategories,
+  findAvailableItems,
 };

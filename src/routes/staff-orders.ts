@@ -1,29 +1,11 @@
 import { Hono } from "hono";
-import { prisma } from "../lib/prisma";
 import { staffAuth } from "../middleware/staff-auth";
 import { emitSocketEvent } from "../lib/socket";
 import { ORDER_STATUS, SOCKET_EVENT } from "../lib/constants";
 import { orderRepository } from "../repositories/order.repository";
+import { tableRepository } from "../repositories/table.repository";
 import { orderService, validateStatusTransition } from "../services/order.service";
 import type { Env } from "../types";
-
-// Lean select for staff order cards — only what the UI needs
-const staffOrderSelect = {
-  id: true,
-  orderCode: true,
-  status: true,
-  total: true,
-  placedAt: true,
-  staffId: true,
-  table: { select: { label: true } },
-  items: {
-    where: { isDeleted: false },
-    select: {
-      quantity: true,
-      menuItem: { select: { name: true, type: true } },
-    },
-  },
-} as const;
 
 export const staffOrdersRoutes = new Hono<Env>();
 
@@ -39,15 +21,11 @@ staffOrdersRoutes.get("/", async (c) => {
 
     const dateFilter = orderService.parseDateFilter(from, to);
 
-    const orders = await prisma.order.findMany({
-      where: {
-        restaurantId: payload.restaurantId,
-        staffId: payload.staffId,
-        ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
-      },
-      select: staffOrderSelect,
-      orderBy: { placedAt: "desc" },
-    });
+    const orders = await orderRepository.findStaffOrders(
+      payload.restaurantId,
+      payload.staffId,
+      dateFilter
+    );
     return c.json(orders);
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -74,32 +52,20 @@ staffOrdersRoutes.patch("/:id", async (c) => {
     const updateData = orderService.buildStatusUpdateData(status, existing);
 
     // Full update for socket broadcast (dashboard/customer needs full data)
-    const fullOrder = await prisma.order.update({
-      where: { id },
-      data: updateData,
-      include: {
-        items: { include: { menuItem: true }, where: { isDeleted: false } },
-        table: true,
-        staff: { select: { id: true, name: true, role: true } },
-      },
-    });
+    const fullOrder = await orderRepository.updateWithBroadcastInclude(id, updateData);
     emitSocketEvent(SOCKET_EVENT.ORDER_UPDATED, fullOrder);
 
     // Free table on settlement
     if (status === ORDER_STATUS.SETTLED && existing.tableId) {
       const otherActive = await orderRepository.countOtherActiveOnTable(existing.tableId, id);
       if (otherActive === 0) {
-        const { tableRepository } = await import("../repositories/table.repository");
         await tableRepository.update(existing.tableId, { status: "FREE" });
         emitSocketEvent(SOCKET_EVENT.TABLE_UPDATED, { id: existing.tableId, status: "FREE" });
       }
     }
 
     // Lean response for staff UI
-    const leanOrder = await prisma.order.findUnique({
-      where: { id },
-      select: staffOrderSelect,
-    });
+    const leanOrder = await orderRepository.findByIdWithStaffSelect(id);
     return c.json(leanOrder);
   } catch {
     return c.json({ error: "Server error" }, 500);

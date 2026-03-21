@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { rateLimit } from "../middleware/rate-limit";
-import { orderDetailInclude } from "../lib/order-select";
 import { ORDER_STATUS } from "../lib/constants";
 import { orderRepository } from "../repositories/order.repository";
 import { tableRepository } from "../repositories/table.repository";
+import { menuRepository } from "../repositories/menu.repository";
+import { ratingRepository } from "../repositories/rating.repository";
 import { orderService, OrderError } from "../services/order.service";
 
 export const publicRoutes = new Hono();
@@ -36,19 +37,7 @@ publicRoutes.get("/table/:tableId", async (c) => {
 publicRoutes.get("/menu/:restaurantId", async (c) => {
   try {
     const restaurantId = c.req.param("restaurantId");
-
-    const categories = await prisma.menuCategory.findMany({
-      where: { restaurantId },
-      select: {
-        id: true,
-        name: true,
-        emoji: true,
-        sortOrder: true,
-        _count: { select: { items: { where: { available: true, isDeleted: false } } } },
-      },
-      orderBy: { sortOrder: "asc" },
-    });
-
+    const categories = await menuRepository.findPublicCategories(restaurantId);
     return c.json(categories);
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -61,32 +50,13 @@ publicRoutes.get("/menu/:restaurantId/category/:categoryId", async (c) => {
     const restaurantId = c.req.param("restaurantId");
     const categoryId = c.req.param("categoryId");
 
-    const category = await prisma.menuCategory.findFirst({
-      where: { id: categoryId, restaurantId },
-    });
+    const category = await menuRepository.findCategoryByIdAndRestaurant(categoryId, restaurantId);
     if (!category) return c.json({ error: "Category not found" }, 404);
 
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
     const limit = Math.min(100, Math.max(1, parseInt(c.req.query("limit") || "50", 10)));
 
-    const items = await prisma.menuItem.findMany({
-      where: { categoryId, available: true, isDeleted: false },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        price: true,
-        type: true,
-        available: true,
-        categoryId: true,
-        restaurantId: true,
-        averageRating: true,
-        ratingCount: true,
-      },
-      orderBy: { averageRating: "desc" },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const items = await menuRepository.findAvailableItems(categoryId, page, limit);
 
     return c.json(items);
   } catch {
@@ -162,13 +132,11 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
 publicRoutes.get("/orders/active/:tableId", async (c) => {
   try {
     const tableId = c.req.param("tableId");
-
     const order = await orderRepository.findActiveByTable(tableId);
 
     if (!order) {
       return c.json({ active: false, order: null });
     }
-
     return c.json({ active: true, order });
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -182,7 +150,6 @@ publicRoutes.get("/orders/active-by-phone/:phone", async (c) => {
     if (!phone) return c.json({ error: "Phone is required" }, 400);
 
     const orders = await orderRepository.findActiveByPhone(phone);
-
     return c.json({ orders });
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -213,13 +180,11 @@ publicRoutes.get("/orders/history/:phone", async (c) => {
 publicRoutes.get("/orders/:orderId", async (c) => {
   try {
     const orderId = c.req.param("orderId");
-
     const order = await orderRepository.findByIdWithRestaurant(orderId);
 
     if (!order) {
       return c.json({ error: "Order not found" }, 404);
     }
-
     return c.json(order);
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -235,11 +200,7 @@ publicRoutes.post("/ratings", async (c) => {
       return c.json({ error: "orderId and ratings are required" }, 400);
     }
 
-    // Validate order exists and is BILLED or SETTLED
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      include: { items: true },
-    });
+    const order = await orderRepository.findByIdWithItems(orderId);
 
     if (!order) {
       return c.json({ error: "Order not found" }, 404);
@@ -253,7 +214,6 @@ publicRoutes.post("/ratings", async (c) => {
       return c.json({ error: "No customer linked to this order" }, 400);
     }
 
-    // Validate all menu item IDs belong to this order
     const orderMenuItemIds = new Set(order.items.map((i) => i.menuItemId));
     for (const r of ratings) {
       if (!r.menuItemId || typeof r.rating !== "number" || r.rating < 1 || r.rating > 5) {
@@ -264,11 +224,10 @@ publicRoutes.post("/ratings", async (c) => {
       }
     }
 
-    // Create ratings and update averages in a transaction
     await prisma.$transaction(async (tx) => {
       for (const r of ratings as { menuItemId: string; rating: number; note?: string }[]) {
-        await tx.menuItemRating.create({
-          data: {
+        await ratingRepository.createWithRecalc(
+          {
             orderId,
             menuItemId: r.menuItemId,
             restaurantId: order.restaurantId,
@@ -276,20 +235,14 @@ publicRoutes.post("/ratings", async (c) => {
             rating: r.rating,
             note: r.note || "",
           },
-        });
+          tx as never
+        );
 
-        const agg = await tx.menuItemRating.aggregate({
-          where: { menuItemId: r.menuItemId },
-          _avg: { rating: true },
-          _count: { rating: true },
-        });
+        const agg = await ratingRepository.aggregateByMenuItem(r.menuItemId, tx as never);
 
-        await tx.menuItem.update({
-          where: { id: r.menuItemId },
-          data: {
-            averageRating: Math.round((agg._avg.rating || 0) * 10) / 10,
-            ratingCount: agg._count.rating,
-          },
+        await menuRepository.updateItem(r.menuItemId, {
+          averageRating: Math.round((agg._avg.rating || 0) * 10) / 10,
+          ratingCount: agg._count.rating,
         });
       }
     });
@@ -313,21 +266,7 @@ publicRoutes.get("/ratings/:menuItemId", async (c) => {
       where.rating = starFilter;
     }
 
-    const [ratings, total] = await Promise.all([
-      prisma.menuItemRating.findMany({
-        where,
-        select: {
-          rating: true,
-          note: true,
-          createdAt: true,
-          customer: { select: { name: true } },
-        },
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.menuItemRating.count({ where }),
-    ]);
+    const [ratings, total] = await ratingRepository.findMany(where, page, limit);
 
     return c.json({
       ratings,

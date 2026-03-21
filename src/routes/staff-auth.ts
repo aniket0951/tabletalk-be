@@ -1,8 +1,9 @@
 import { Hono } from "hono";
-import { prisma } from "../lib/prisma";
 import { createStaffToken, setStaffCookie, clearStaffCookie } from "../lib/staff-jwt";
 import { staffAuth } from "../middleware/staff-auth";
 import { rateLimit } from "../middleware/rate-limit";
+import { staffRepository } from "../repositories/staff.repository";
+import { restaurantRepository } from "../repositories/restaurant.repository";
 import { staffService } from "../services/staff.service";
 import type { Env } from "../types";
 
@@ -17,9 +18,7 @@ staffAuthRoutes.post("/login", rateLimit(5, 15 * 60 * 1000), async (c) => {
       return c.json({ error: "Restaurant code and PIN are required" }, 400);
     }
 
-    const restaurant = await prisma.restaurant.findFirst({
-      where: { restaurantCode, isDeleted: false },
-    });
+    const restaurant = await restaurantRepository.findByCodeActive(restaurantCode);
     if (!restaurant) {
       return c.json({ error: "Invalid restaurant code" }, 401);
     }
@@ -55,16 +54,12 @@ staffAuthRoutes.get("/me", staffAuth, async (c) => {
   try {
     const payload = c.get("staff");
 
-    const staff = await prisma.staff.findUnique({
-      where: { id: payload.staffId },
-    });
-    if (!staff || staff.isDeleted) {
+    const staff = await staffRepository.findById(payload.staffId);
+    if (!staff) {
       return c.json({ error: "Staff not found" }, 401);
     }
 
-    const restaurant = await prisma.restaurant.findUnique({
-      where: { id: payload.restaurantId },
-    });
+    const restaurant = await restaurantRepository.findByIdBasic(payload.restaurantId);
 
     return c.json({
       staffId: staff.id,

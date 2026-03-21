@@ -37,7 +37,10 @@ staffRoutes.post("/", async (c) => {
 
     const isUnique = await staffService.checkPinUniqueness(restaurantId, pin);
     if (!isUnique) {
-      return c.json({ error: "PIN already in use by another staff member" }, 400);
+      return c.json(
+        { error: "PIN already in use by another staff member" },
+        400,
+      );
     }
 
     const pinHash = await staffService.hashPin(pin);
@@ -75,9 +78,16 @@ staffRoutes.patch("/:id", async (c) => {
       const pinError = staffService.validatePin(pin);
       if (pinError) return c.json({ error: pinError }, 400);
 
-      const isUnique = await staffService.checkPinUniqueness(restaurantId, pin, id);
+      const isUnique = await staffService.checkPinUniqueness(
+        restaurantId,
+        pin,
+        id,
+      );
       if (!isUnique) {
-        return c.json({ error: "PIN already in use by another staff member" }, 400);
+        return c.json(
+          { error: "PIN already in use by another staff member" },
+          400,
+        );
       }
     }
 
@@ -103,11 +113,10 @@ staffRoutes.patch("/:id", async (c) => {
 // DELETE /staff/:id
 staffRoutes.delete("/:id", async (c) => {
   try {
-    const restaurantId = c.get(CTX.RESTAURANT_ID);
     const id = c.req.param("id");
 
     const existing = await staffRepository.findById(id);
-    if (!existing || existing.restaurantId !== restaurantId) {
+    if (!existing) {
       return c.json({ error: "Not found" }, 404);
     }
 

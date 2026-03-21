@@ -47,7 +47,9 @@ restaurantRoutes.patch("/", requireRestaurant, async (c) => {
     if (body.city !== undefined) data.city = body.city;
     if (body.upiId !== undefined) data.upiId = body.upiId;
     if (body.serviceMode !== undefined) {
-      if (![SERVICE_MODE.DINE_IN, SERVICE_MODE.WALK_IN].includes(body.serviceMode)) {
+      if (
+        ![SERVICE_MODE.DINE_IN, SERVICE_MODE.WALK_IN].includes(body.serviceMode)
+      ) {
         return c.json({ error: "Invalid serviceMode" }, 400);
       }
       data.serviceMode = body.serviceMode;
@@ -88,9 +90,17 @@ restaurantRoutes.post("/", async (c) => {
     });
 
     const email = c.get(CTX.EMAIL);
-    const newToken = await createOwnerToken({ userId, email, restaurantId: restaurant.id });
+    const newToken = await createOwnerToken({
+      userId,
+      email,
+      restaurantId: restaurant.id,
+    });
 
-    return c.json({ id: restaurant.id, name: restaurant.name, token: newToken });
+    return c.json({
+      id: restaurant.id,
+      name: restaurant.name,
+      token: newToken,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return c.json({ error: "Server error", detail: message }, 500);
@@ -104,7 +114,9 @@ restaurantRoutes.post("/code", requireRestaurant, async (c) => {
 
     const code = await restaurantService.generateRestaurantCode(restaurantId);
 
-    const updated = await restaurantRepository.update(restaurantId, { restaurantCode: code });
+    const updated = await restaurantRepository.update(restaurantId, {
+      restaurantCode: code,
+    });
 
     return c.json({ restaurantCode: updated.restaurantCode });
   } catch (error) {

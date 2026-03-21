@@ -128,6 +128,61 @@ export function countOtherActiveOnTable(tableId: string, excludeOrderId: string)
   });
 }
 
+const staffOrderSelect = {
+  id: true,
+  orderCode: true,
+  status: true,
+  total: true,
+  placedAt: true,
+  staffId: true,
+  table: { select: { label: true } },
+  items: {
+    where: { isDeleted: false },
+    select: {
+      quantity: true,
+      menuItem: { select: { name: true, type: true } },
+    },
+  },
+} as const;
+
+export function findStaffOrders(restaurantId: string, staffId: string, dateFilter: Record<string, Date>) {
+  return prisma.order.findMany({
+    where: {
+      restaurantId,
+      staffId,
+      ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
+    },
+    select: staffOrderSelect,
+    orderBy: { placedAt: "desc" as const },
+  });
+}
+
+export function updateWithBroadcastInclude(id: string, data: Record<string, unknown>) {
+  return prisma.order.update({
+    where: { id },
+    data,
+    include: {
+      items: { include: { menuItem: true }, where: { isDeleted: false } },
+      table: true,
+      staff: { select: { id: true, name: true, role: true } },
+    },
+  });
+}
+
+export function findByIdWithStaffSelect(id: string) {
+  return prisma.order.findUnique({
+    where: { id },
+    select: staffOrderSelect,
+  });
+}
+
+export function findByIdWithItems(id: string) {
+  return prisma.order.findUnique({
+    where: { id },
+    include: { items: true },
+  });
+}
+
 export const orderRepository = {
   findMany,
   count,
@@ -142,4 +197,8 @@ export const orderRepository = {
   findByIdWithRestaurant,
   findLastByRestaurant,
   countOtherActiveOnTable,
+  findStaffOrders,
+  updateWithBroadcastInclude,
+  findByIdWithStaffSelect,
+  findByIdWithItems,
 };
