@@ -87,7 +87,7 @@ jobs:
     if: inputs.environment == 'staging'
     environment:
       name: staging
-      url: ${{ vars.STAGING_URL }}
+      url: ${{ vars.FRONTEND_URL }}
 
     steps:
       - name: Checkout repository
@@ -97,9 +97,9 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy to Staging
-        run: railway up --service ${{ vars.RAILWAY_SERVICE_NAME || 'tabletalk-api' }} --environment staging
+        run: railway up
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
 
       - name: Deployment Summary
         run: |
@@ -116,7 +116,7 @@ jobs:
     if: inputs.environment == 'production'
     environment:
       name: production
-      url: ${{ vars.PRODUCTION_URL }}
+      url: ${{ vars.FRONTEND_URL }}
 
     steps:
       - name: Checkout repository
@@ -126,9 +126,9 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy to Production
-        run: railway up --service ${{ vars.RAILWAY_SERVICE_NAME || 'tabletalk-api' }} --environment production
+        run: railway up
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PRODUCTION }}
 
       - name: Deployment Summary
         run: |
