@@ -1,26 +1,21 @@
 import { Hono } from "hono";
-import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
 import { subscriptionGuard } from "../middleware/subscription-guard";
 import { emitSocketEvent } from "../lib/socket";
-import { CTX } from "../lib/constants";
+import { requireRestaurant } from "../middleware/require-restaurant";
+import { CTX, TABLE_STATUS, SOCKET_EVENT } from "../lib/constants";
+import { tableRepository } from "../repositories/table.repository";
 import type { Env } from "../types";
 
 export const tablesRoutes = new Hono<Env>();
 
-tablesRoutes.use("*", ownerAuth, subscriptionGuard);
+tablesRoutes.use("*", ownerAuth, requireRestaurant, subscriptionGuard);
 
 // GET /tables
 tablesRoutes.get("/", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
-    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
-
-    const tables = await prisma.diningTable.findMany({
-      where: { restaurantId },
-      orderBy: { tableNumber: "asc" },
-    });
-
+    const tables = await tableRepository.findMany(restaurantId);
     return c.json(tables);
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -31,26 +26,20 @@ tablesRoutes.get("/", async (c) => {
 tablesRoutes.post("/", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
-    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const { label, capacity } = await c.req.json();
     if (!label) return c.json({ error: "Missing label" }, 400);
 
-    const maxTable = await prisma.diningTable.findFirst({
-      where: { restaurantId },
-      orderBy: { tableNumber: "desc" },
+    const maxTable = await tableRepository.findMaxTableNumber(restaurantId);
+
+    const table = await tableRepository.create({
+      tableNumber: (maxTable?.tableNumber || 0) + 1,
+      label,
+      capacity: capacity || 4,
+      restaurantId,
     });
 
-    const table = await prisma.diningTable.create({
-      data: {
-        tableNumber: (maxTable?.tableNumber || 0) + 1,
-        label,
-        capacity: capacity || 4,
-        restaurantId,
-      },
-    });
-
-    emitSocketEvent("table:created", table);
+    emitSocketEvent(SOCKET_EVENT.TABLE_CREATED, table);
     return c.json(table);
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -61,10 +50,9 @@ tablesRoutes.post("/", async (c) => {
 tablesRoutes.patch("/:id", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
-    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
-    const existing = await prisma.diningTable.findUnique({ where: { id } });
+    const existing = await tableRepository.findById(id);
     if (!existing || existing.restaurantId !== restaurantId) {
       return c.json({ error: "Not found" }, 404);
     }
@@ -83,18 +71,15 @@ tablesRoutes.patch("/:id", async (c) => {
     }
     if (body.active !== undefined) data.active = Boolean(body.active);
     if (body.status !== undefined) {
-      if (!["FREE", "OCCUPIED"].includes(body.status)) {
+      if (![TABLE_STATUS.FREE, TABLE_STATUS.OCCUPIED].includes(body.status)) {
         return c.json({ error: "Invalid status" }, 400);
       }
       data.status = body.status;
     }
 
-    const table = await prisma.diningTable.update({
-      where: { id },
-      data,
-    });
+    const table = await tableRepository.update(id, data);
 
-    emitSocketEvent("table:updated", table);
+    emitSocketEvent(SOCKET_EVENT.TABLE_UPDATED, table);
     return c.json(table);
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -105,19 +90,18 @@ tablesRoutes.patch("/:id", async (c) => {
 tablesRoutes.delete("/:id", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
-    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
     const id = c.req.param("id");
 
-    const table = await prisma.diningTable.findUnique({ where: { id } });
+    const table = await tableRepository.findById(id);
     if (!table || table.restaurantId !== restaurantId) {
       return c.json({ error: "Not found" }, 404);
     }
-    if (table.status === "OCCUPIED") {
+    if (table.status === TABLE_STATUS.OCCUPIED) {
       return c.json({ error: "Cannot delete occupied table" }, 400);
     }
 
-    await prisma.diningTable.delete({ where: { id } });
-    emitSocketEvent("table:deleted", { id });
+    await tableRepository.remove(id);
+    emitSocketEvent(SOCKET_EVENT.TABLE_DELETED, { id });
     return c.json({ success: true });
   } catch {
     return c.json({ error: "Server error" }, 500);

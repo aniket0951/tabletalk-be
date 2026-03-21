@@ -1,8 +1,10 @@
 import { Hono } from "hono";
-import { prisma } from "../lib/prisma";
 import { ownerAuth } from "../middleware/owner-auth";
 import { createOwnerToken } from "../lib/jwt";
-import { CTX } from "../lib/constants";
+import { requireRestaurant } from "../middleware/require-restaurant";
+import { CTX, SERVICE_MODE } from "../lib/constants";
+import { restaurantRepository } from "../repositories/restaurant.repository";
+import { restaurantService } from "../services/restaurant.service";
 import type { Env } from "../types";
 
 export const restaurantRoutes = new Hono<Env>();
@@ -10,16 +12,11 @@ export const restaurantRoutes = new Hono<Env>();
 restaurantRoutes.use("*", ownerAuth);
 
 // GET /restaurant
-restaurantRoutes.get("/", async (c) => {
+restaurantRoutes.get("/", requireRestaurant, async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
-    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
-    const restaurant = await prisma.restaurant.findUnique({
-      where: { id: restaurantId },
-      include: { _count: { select: { tables: true } } },
-    });
-
+    const restaurant = await restaurantRepository.findById(restaurantId);
     if (!restaurant) return c.json({ error: "No restaurant" }, 404);
 
     return c.json({
@@ -39,10 +36,9 @@ restaurantRoutes.get("/", async (c) => {
 });
 
 // PATCH /restaurant
-restaurantRoutes.patch("/", async (c) => {
+restaurantRoutes.patch("/", requireRestaurant, async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
-    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
     const body = await c.req.json();
     const data: Record<string, unknown> = {};
@@ -51,16 +47,13 @@ restaurantRoutes.patch("/", async (c) => {
     if (body.city !== undefined) data.city = body.city;
     if (body.upiId !== undefined) data.upiId = body.upiId;
     if (body.serviceMode !== undefined) {
-      if (!["DINE_IN", "WALK_IN"].includes(body.serviceMode)) {
+      if (![SERVICE_MODE.DINE_IN, SERVICE_MODE.WALK_IN].includes(body.serviceMode)) {
         return c.json({ error: "Invalid serviceMode" }, 400);
       }
       data.serviceMode = body.serviceMode;
     }
 
-    const updated = await prisma.restaurant.update({
-      where: { id: restaurantId },
-      data,
-    });
+    const updated = await restaurantRepository.update(restaurantId, data);
 
     return c.json({
       id: updated.id,
@@ -86,17 +79,14 @@ restaurantRoutes.post("/", async (c) => {
       return c.json({ error: "Name and phone are required" }, 400);
     }
 
-    const restaurant = await prisma.restaurant.create({
-      data: {
-        name: body.name,
-        phone: body.phone,
-        city: body.city || "",
-        serviceMode: body.serviceMode || "DINE_IN",
-        userId,
-      },
+    const restaurant = await restaurantRepository.create({
+      name: body.name,
+      phone: body.phone,
+      city: body.city || "",
+      serviceMode: body.serviceMode || SERVICE_MODE.DINE_IN,
+      userId,
     });
 
-    // Re-issue token with restaurantId so subsequent requests don't need DB lookup
     const email = c.get(CTX.EMAIL);
     const newToken = await createOwnerToken({ userId, email, restaurantId: restaurant.id });
 
@@ -108,34 +98,13 @@ restaurantRoutes.post("/", async (c) => {
 });
 
 // POST /restaurant/code
-restaurantRoutes.post("/code", async (c) => {
+restaurantRoutes.post("/code", requireRestaurant, async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
-    if (!restaurantId) return c.json({ error: "No restaurant" }, 404);
 
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    function generateCode(): string {
-      const bytes = crypto.getRandomValues(new Uint8Array(6));
-      let code = "";
-      for (let i = 0; i < 6; i++) {
-        code += chars[bytes[i] % chars.length];
-      }
-      return code;
-    }
+    const code = await restaurantService.generateRestaurantCode(restaurantId);
 
-    let code = generateCode();
-    let attempts = 0;
-    while (attempts < 10) {
-      const existing = await prisma.restaurant.findFirst({ where: { restaurantCode: code } });
-      if (!existing || existing.id === restaurantId) break;
-      code = generateCode();
-      attempts++;
-    }
-
-    const updated = await prisma.restaurant.update({
-      where: { id: restaurantId },
-      data: { restaurantCode: code },
-    });
+    const updated = await restaurantRepository.update(restaurantId, { restaurantCode: code });
 
     return c.json({ restaurantCode: updated.restaurantCode });
   } catch (error) {

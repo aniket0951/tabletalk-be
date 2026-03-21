@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
-import { emitSocketEvent } from "../lib/socket";
-import { upsertCustomer } from "../lib/customer";
 import { rateLimit } from "../middleware/rate-limit";
 import { orderDetailInclude } from "../lib/order-select";
+import { ORDER_STATUS } from "../lib/constants";
+import { orderRepository } from "../repositories/order.repository";
+import { tableRepository } from "../repositories/table.repository";
+import { orderService, OrderError } from "../services/order.service";
 
 export const publicRoutes = new Hono();
 
@@ -12,10 +14,7 @@ publicRoutes.get("/table/:tableId", async (c) => {
   try {
     const tableId = c.req.param("tableId");
 
-    const table = await prisma.diningTable.findUnique({
-      where: { id: tableId },
-      include: { restaurant: { select: { id: true, name: true } } },
-    });
+    const table = await tableRepository.findByIdWithRestaurant(tableId);
 
     if (!table || table.isDeleted) {
       return c.json({ error: "Table not found" }, 404);
@@ -135,103 +134,21 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
       }
     }
 
-    // Get table + restaurant
-    const table = await prisma.diningTable.findUnique({
-      where: { id: tableId },
-      include: { restaurant: true },
+    const order = await orderService.createOrder({
+      tableId,
+      customerPhone: customerPhone.trim(),
+      customerName,
+      specialNote,
+      items,
     });
-
-    if (!table || table.isDeleted) {
-      return c.json({ error: "Table not found" }, 404);
-    }
-
-    if (table.status === "OCCUPIED") {
-      return c.json({ error: "This table is currently occupied. Please wait for the current order to be settled.", code: "TABLE_OCCUPIED" }, 409);
-    }
-
-    const restaurantId = table.restaurantId;
-
-    // Fetch menu items to get prices
-    const menuItemIds = items.map((i: { menuItemId: string }) => i.menuItemId);
-    const menuItems = await prisma.menuItem.findMany({
-      where: { id: { in: menuItemIds }, available: true, isDeleted: false },
-    });
-
-    if (menuItems.length !== menuItemIds.length) {
-      return c.json({ error: "Some items are unavailable" }, 400);
-    }
-
-    const priceMap = new Map(menuItems.map((mi) => [mi.id, mi.price]));
-
-    // Calculate totals
-    let subtotal = 0;
-    const orderItems = items.map(
-      (i: { menuItemId: string; quantity: number }) => {
-        const unitPrice = priceMap.get(i.menuItemId)!;
-        const qty = Math.floor(Number(i.quantity));
-        subtotal += unitPrice * qty;
-        return {
-          menuItemId: i.menuItemId,
-          quantity: qty,
-          unitPrice,
-        };
-      }
-    );
-
-    const tax = Math.round(subtotal * 0.05 * 100) / 100;
-    const total = Math.round((subtotal + tax) * 100) / 100;
-
-    // Generate order code
-    const lastOrder = await prisma.order.findFirst({
-      where: { restaurantId },
-      orderBy: { createdAt: "desc" },
-    });
-
-    let nextNum = 1;
-    if (lastOrder?.orderCode) {
-      const match = lastOrder.orderCode.match(/\d+/);
-      if (match) nextNum = parseInt(match[0], 10) + 1;
-    }
-    const orderCode = `ORD${String(nextNum).padStart(3, "0")}`;
-
-    // Upsert customer
-    const customerId = await upsertCustomer({
-      restaurantId,
-      phone: customerPhone.trim(),
-      name: customerName || undefined,
-      orderTotal: total,
-    });
-
-    // Create order + items in transaction
-    const order = await prisma.order.create({
-      data: {
-        orderCode,
-        tableId,
-        restaurantId,
-        customerPhone: customerPhone.trim(),
-        customerName: customerName || "",
-        customerId,
-        specialNote: specialNote || "",
-        subtotal,
-        tax,
-        total,
-        status: "NEW",
-        items: { create: orderItems },
-      },
-      include: orderDetailInclude,
-    });
-
-    // Set table to OCCUPIED
-    await prisma.diningTable.update({
-      where: { id: tableId },
-      data: { status: "OCCUPIED" },
-    });
-
-    emitSocketEvent("order:created", order);
-    emitSocketEvent("table:updated", { ...table, status: "OCCUPIED" });
 
     return c.json(order, 201);
-  } catch {
+  } catch (err) {
+    if (err instanceof OrderError) {
+      const body: Record<string, string> = { error: err.message };
+      if (err.code) body.code = err.code;
+      return c.json(body, err.statusCode as 400);
+    }
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -241,15 +158,7 @@ publicRoutes.get("/orders/active/:tableId", async (c) => {
   try {
     const tableId = c.req.param("tableId");
 
-    const order = await prisma.order.findFirst({
-      where: {
-        tableId,
-        status: { notIn: ["SETTLED"] },
-        isDeleted: false,
-      },
-      include: orderDetailInclude,
-      orderBy: { placedAt: "desc" },
-    });
+    const order = await orderRepository.findActiveByTable(tableId);
 
     if (!order) {
       return c.json({ active: false, order: null });
@@ -267,15 +176,7 @@ publicRoutes.get("/orders/active-by-phone/:phone", async (c) => {
     const phone = c.req.param("phone").trim();
     if (!phone) return c.json({ error: "Phone is required" }, 400);
 
-    const orders = await prisma.order.findMany({
-      where: {
-        customerPhone: phone,
-        status: { notIn: ["SETTLED"] },
-        isDeleted: false,
-      },
-      include: orderDetailInclude,
-      orderBy: { placedAt: "desc" },
-    });
+    const orders = await orderRepository.findActiveByPhone(phone);
 
     return c.json({ orders });
   } catch {
@@ -292,28 +193,7 @@ publicRoutes.get("/orders/history/:phone", async (c) => {
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(c.req.query("limit") || "20", 10)));
 
-    const where = { customerPhone: phone };
-
-    const [orders, total] = await Promise.all([
-      prisma.order.findMany({
-        where,
-        select: {
-          id: true,
-          orderCode: true,
-          status: true,
-          total: true,
-          placedAt: true,
-          customerName: true,
-          table: { select: { label: true, tableNumber: true } },
-          restaurant: { select: { id: true, name: true } },
-          _count: { select: { items: true } },
-        },
-        orderBy: { placedAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.order.count({ where }),
-    ]);
+    const [orders, total] = await orderRepository.findHistory(phone, page, limit);
 
     return c.json({
       orders,
@@ -329,13 +209,7 @@ publicRoutes.get("/orders/:orderId", async (c) => {
   try {
     const orderId = c.req.param("orderId");
 
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      include: {
-        ...orderDetailInclude,
-        restaurant: { select: { id: true, name: true } },
-      },
-    });
+    const order = await orderRepository.findByIdWithRestaurant(orderId);
 
     if (!order) {
       return c.json({ error: "Order not found" }, 404);
@@ -366,7 +240,7 @@ publicRoutes.post("/ratings", async (c) => {
       return c.json({ error: "Order not found" }, 404);
     }
 
-    if (order.status !== "BILLED" && order.status !== "SETTLED") {
+    if (order.status !== ORDER_STATUS.BILLED && order.status !== ORDER_STATUS.SETTLED) {
       return c.json({ error: "Order must be billed or settled to rate" }, 400);
     }
 
@@ -388,7 +262,6 @@ publicRoutes.post("/ratings", async (c) => {
     // Create ratings and update averages in a transaction
     await prisma.$transaction(async (tx) => {
       for (const r of ratings as { menuItemId: string; rating: number; note?: string }[]) {
-        // Create the rating record
         await tx.menuItemRating.create({
           data: {
             orderId,
@@ -400,7 +273,6 @@ publicRoutes.post("/ratings", async (c) => {
           },
         });
 
-        // Recalculate average rating for this menu item
         const agg = await tx.menuItemRating.aggregate({
           where: { menuItemId: r.menuItemId },
           _avg: { rating: true },

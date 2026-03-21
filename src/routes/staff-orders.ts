@@ -2,6 +2,9 @@ import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { staffAuth } from "../middleware/staff-auth";
 import { emitSocketEvent } from "../lib/socket";
+import { ORDER_STATUS, SOCKET_EVENT } from "../lib/constants";
+import { orderRepository } from "../repositories/order.repository";
+import { orderService } from "../services/order.service";
 import type { Env } from "../types";
 
 // Lean select for staff order cards — only what the UI needs
@@ -34,15 +37,7 @@ staffOrdersRoutes.get("/", async (c) => {
     const from = c.req.query("from");
     const to = c.req.query("to");
 
-    const dateFilter: Record<string, Date> = {};
-    if (from) {
-      const [y, m, d] = from.split("-").map(Number);
-      dateFilter.gte = new Date(y, m - 1, d, 0, 0, 0, 0);
-    }
-    if (to) {
-      const [y, m, d] = to.split("-").map(Number);
-      dateFilter.lte = new Date(y, m - 1, d, 23, 59, 59, 999);
-    }
+    const dateFilter = orderService.parseDateFilter(from, to);
 
     const orders = await prisma.order.findMany({
       where: {
@@ -66,26 +61,12 @@ staffOrdersRoutes.patch("/:id", async (c) => {
     const id = c.req.param("id");
     const { status } = await c.req.json();
 
-    const existing = await prisma.order.findUnique({ where: { id } });
+    const existing = await orderRepository.findById(id);
     if (!existing || existing.restaurantId !== payload.restaurantId) {
       return c.json({ error: "Not found" }, 404);
     }
 
-    const timestampMap: Record<string, string> = {
-      COOKING: "cookingAt",
-      READY: "readyAt",
-      BILLED: "billedAt",
-      SETTLED: "settledAt",
-    };
-
-    const updateData: Record<string, unknown> = { status };
-    if (timestampMap[status]) {
-      updateData[timestampMap[status]] = new Date();
-    }
-    // Auto-set confirmedAt when moving to COOKING (if not already set)
-    if (status === "COOKING" && !existing.confirmedAt) {
-      updateData.confirmedAt = new Date();
-    }
+    const updateData = orderService.buildStatusUpdateData(status, existing);
 
     // Full update for socket broadcast (dashboard/customer needs full data)
     const fullOrder = await prisma.order.update({
@@ -97,24 +78,15 @@ staffOrdersRoutes.patch("/:id", async (c) => {
         staff: { select: { id: true, name: true, role: true } },
       },
     });
-    emitSocketEvent("order:updated", fullOrder);
+    emitSocketEvent(SOCKET_EVENT.ORDER_UPDATED, fullOrder);
 
-    // Set table to FREE when order is settled (if no other active orders on this table)
-    if (status === "SETTLED" && existing.tableId) {
-      const otherActive = await prisma.order.count({
-        where: {
-          tableId: existing.tableId,
-          status: { notIn: ["SETTLED"] },
-          id: { not: id },
-          isDeleted: false,
-        },
-      });
+    // Free table on settlement
+    if (status === ORDER_STATUS.SETTLED && existing.tableId) {
+      const otherActive = await orderRepository.countOtherActiveOnTable(existing.tableId, id);
       if (otherActive === 0) {
-        await prisma.diningTable.update({
-          where: { id: existing.tableId },
-          data: { status: "FREE" },
-        });
-        emitSocketEvent("table:updated", { id: existing.tableId, status: "FREE" });
+        const { tableRepository } = await import("../repositories/table.repository");
+        await tableRepository.update(existing.tableId, { status: "FREE" });
+        emitSocketEvent(SOCKET_EVENT.TABLE_UPDATED, { id: existing.tableId, status: "FREE" });
       }
     }
 

@@ -1,0 +1,71 @@
+import { prisma } from "../lib/prisma";
+import type { TableStatus } from "@prisma/client";
+
+export function findMany(restaurantId: string) {
+  return prisma.diningTable.findMany({
+    where: { restaurantId },
+    orderBy: { tableNumber: "asc" as const },
+  });
+}
+
+export function findById(id: string) {
+  return prisma.diningTable.findUnique({ where: { id } });
+}
+
+export function findByIdWithRestaurant(id: string) {
+  return prisma.diningTable.findUnique({
+    where: { id },
+    include: { restaurant: { select: { id: true, name: true } } },
+  });
+}
+
+export function findByIdFull(id: string) {
+  return prisma.diningTable.findUnique({
+    where: { id },
+    include: { restaurant: true },
+  });
+}
+
+export function create(data: { tableNumber: number; label: string; capacity: number; restaurantId: string }) {
+  return prisma.diningTable.create({ data });
+}
+
+export function update(id: string, data: Record<string, unknown>) {
+  return prisma.diningTable.update({ where: { id }, data });
+}
+
+export function remove(id: string) {
+  return prisma.diningTable.delete({ where: { id } });
+}
+
+export function findMaxTableNumber(restaurantId: string) {
+  return prisma.diningTable.findFirst({
+    where: { restaurantId },
+    orderBy: { tableNumber: "desc" as const },
+  });
+}
+
+export function countByStatus(restaurantId: string, status: TableStatus) {
+  return prisma.diningTable.count({
+    where: { restaurantId, status },
+  });
+}
+
+export function countActive(restaurantId: string) {
+  return prisma.diningTable.count({
+    where: { restaurantId, active: true },
+  });
+}
+
+export const tableRepository = {
+  findMany,
+  findById,
+  findByIdWithRestaurant,
+  findByIdFull,
+  create,
+  update,
+  remove,
+  findMaxTableNumber,
+  countByStatus,
+  countActive,
+};
