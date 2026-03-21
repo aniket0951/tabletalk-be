@@ -5,6 +5,7 @@ import {
   findMany,
   findById,
   findByIdWithRestaurant,
+  findByIdFull,
   create,
   update,
   remove,
@@ -47,6 +48,21 @@ describe("findByIdWithRestaurant", () => {
     expect(prismaMock.diningTable.findUnique).toHaveBeenCalledWith({
       where: { id: "t-1" },
       include: { restaurant: { select: { id: true, name: true } } },
+    });
+  });
+});
+
+describe("findByIdFull", () => {
+  it("includes full restaurant", async () => {
+    prismaMock.diningTable.findUnique.mockResolvedValue({
+      id: "t-1",
+      restaurant: { id: "r-1", name: "Test" },
+    });
+    const result = await findByIdFull("t-1");
+    expect(result?.restaurant).toBeDefined();
+    expect(prismaMock.diningTable.findUnique).toHaveBeenCalledWith({
+      where: { id: "t-1" },
+      include: { restaurant: true },
     });
   });
 });

@@ -7,9 +7,12 @@ import {
   countByStatus,
   findById,
   findByIdWithDetail,
+  update,
+  create,
   findActiveByTable,
   findActiveByPhone,
   findHistory,
+  findByIdWithRestaurant,
   findLastByRestaurant,
   countOtherActiveOnTable,
 } from "../order.repository";
@@ -181,6 +184,39 @@ describe("findLastByRestaurant", () => {
       where: { restaurantId: "rest-1" },
       orderBy: { createdAt: "desc" },
     });
+  });
+});
+
+describe("update", () => {
+  it("updates order with include", async () => {
+    prismaMock.order.update.mockResolvedValue({ id: "ord-1", status: "COOKING" });
+    const result = await update("ord-1", { status: "COOKING" });
+    expect(result).toEqual({ id: "ord-1", status: "COOKING" });
+    expect(prismaMock.order.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "ord-1" },
+        data: { status: "COOKING" },
+      })
+    );
+  });
+});
+
+describe("create", () => {
+  it("creates order with include", async () => {
+    prismaMock.order.create.mockResolvedValue({ id: "ord-new", orderCode: "ORD001" });
+    const result = await create({ orderCode: "ORD001", restaurantId: "rest-1" });
+    expect(result).toEqual({ id: "ord-new", orderCode: "ORD001" });
+  });
+});
+
+describe("findByIdWithRestaurant", () => {
+  it("includes restaurant data", async () => {
+    prismaMock.order.findUnique.mockResolvedValue({
+      id: "ord-1",
+      restaurant: { id: "rest-1", name: "Test" },
+    });
+    const result = await findByIdWithRestaurant("ord-1");
+    expect(result?.restaurant).toEqual({ id: "rest-1", name: "Test" });
   });
 });
 

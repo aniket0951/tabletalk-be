@@ -132,10 +132,48 @@ describe("cancelSubscription", () => {
   });
 });
 
+describe("createCheckout", () => {
+  it("throws on invalid plan", async () => {
+    await expect(createCheckout("rest-1", "usr-1", "INVALID")).rejects.toThrow("Invalid plan");
+  });
+
+  it("throws when restaurant not found", async () => {
+    vi.mocked(prisma.restaurant.findUnique).mockResolvedValue(null);
+    await expect(createCheckout("rest-1", "usr-1", "STARTER")).rejects.toThrow("No restaurant");
+  });
+
+  it("creates razorpay order and pending subscription", async () => {
+    vi.mocked(prisma.restaurant.findUnique).mockResolvedValue({
+      id: "rest-1",
+      name: "Test Restaurant",
+      user: { email: "a@b.com" },
+    } as never);
+    const mockRzp = { orders: { create: vi.fn().mockResolvedValue({ id: "rzp_order_1" }) } };
+    vi.mocked(getRazorpay).mockReturnValue(mockRzp as never);
+    vi.mocked(subscriptionRepository.create).mockResolvedValue({ id: "sub-1" } as never);
+
+    const result = await createCheckout("rest-1", "usr-1", "STARTER");
+
+    expect(result.razorpayOrderId).toBe("rzp_order_1");
+    expect(result.amount).toBe(99900);
+    expect(result.name).toBe("Test Restaurant");
+    expect(result.email).toBe("a@b.com");
+    expect(subscriptionRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ plan: "STARTER", status: "PENDING" })
+    );
+  });
+});
+
 describe("verifyPayment", () => {
   it("throws on missing payment details", async () => {
     await expect(
       verifyPayment({ razorpay_payment_id: "", razorpay_order_id: "ord", razorpay_signature: "sig" })
+    ).rejects.toThrow("Missing payment details");
+  });
+
+  it("throws on missing order_id", async () => {
+    await expect(
+      verifyPayment({ razorpay_payment_id: "pay", razorpay_order_id: "", razorpay_signature: "sig" })
     ).rejects.toThrow("Missing payment details");
   });
 
@@ -154,6 +192,36 @@ describe("verifyPayment", () => {
     await expect(
       verifyPayment({ razorpay_payment_id: "pay_1", razorpay_order_id: "ord_1", razorpay_signature: "valid" })
     ).rejects.toThrow("Subscription not found");
+  });
+
+  it("activates subscription and creates invoice on valid payment", async () => {
+    vi.mocked(verifyOrderPaymentSignature).mockReturnValue(true);
+    vi.mocked(subscriptionRepository.findByRazorpayOrderId).mockResolvedValue({
+      id: "sub-1",
+      plan: "STARTER",
+    } as never);
+    const mockRzp = { payments: { fetch: vi.fn().mockResolvedValue({ method: "upi" }) } };
+    vi.mocked(getRazorpay).mockReturnValue(mockRzp as never);
+    vi.mocked(subscriptionRepository.update).mockResolvedValue({ id: "sub-1", status: "ACTIVE" } as never);
+    vi.mocked(invoiceRepository.create).mockResolvedValue({} as never);
+
+    const result = await verifyPayment({
+      razorpay_payment_id: "pay_1",
+      razorpay_order_id: "ord_1",
+      razorpay_signature: "valid",
+    });
+
+    expect(subscriptionRepository.update).toHaveBeenCalledWith("sub-1", expect.objectContaining({
+      status: "ACTIVE",
+      paymentMethod: "upi",
+    }));
+    expect(invoiceRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+      subscriptionId: "sub-1",
+      amount: 999, // 99900 / 100
+      status: "PAID",
+      razorpayPaymentId: "pay_1",
+    }));
+    expect(result).toEqual(expect.objectContaining({ status: "ACTIVE" }));
   });
 });
 

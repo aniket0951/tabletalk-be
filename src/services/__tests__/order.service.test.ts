@@ -42,6 +42,7 @@ vi.mock("../../repositories/table.repository", () => ({
 import {
   parseDateFilter,
   buildStatusUpdateData,
+  validateStatusTransition,
   settleOrder,
   generateOrderCode,
   createOrder,
@@ -313,5 +314,125 @@ describe("createOrder", () => {
     );
     expect(tableRepository.update).toHaveBeenCalledWith("table-1", { status: "OCCUPIED" });
     expect(emitSocketEvent).toHaveBeenCalledTimes(2); // ORDER_CREATED + TABLE_UPDATED
+  });
+});
+
+describe("validateStatusTransition", () => {
+  it("allows NEW → COOKING", () => {
+    expect(validateStatusTransition("NEW", "COOKING")).toBeNull();
+  });
+
+  it("allows COOKING → READY", () => {
+    expect(validateStatusTransition("COOKING", "READY")).toBeNull();
+  });
+
+  it("allows READY → BILLED", () => {
+    expect(validateStatusTransition("READY", "BILLED")).toBeNull();
+  });
+
+  it("allows BILLED → SETTLED", () => {
+    expect(validateStatusTransition("BILLED", "SETTLED")).toBeNull();
+  });
+
+  it("rejects NEW → SETTLED (skipping steps)", () => {
+    const err = validateStatusTransition("NEW", "SETTLED");
+    expect(err).toBe("Cannot transition from NEW to SETTLED");
+  });
+
+  it("rejects NEW → BILLED", () => {
+    expect(validateStatusTransition("NEW", "BILLED")).not.toBeNull();
+  });
+
+  it("rejects COOKING → SETTLED", () => {
+    expect(validateStatusTransition("COOKING", "SETTLED")).not.toBeNull();
+  });
+
+  it("rejects backward transitions", () => {
+    expect(validateStatusTransition("READY", "COOKING")).not.toBeNull();
+    expect(validateStatusTransition("SETTLED", "NEW")).not.toBeNull();
+    expect(validateStatusTransition("BILLED", "READY")).not.toBeNull();
+  });
+
+  it("rejects SETTLED → anything", () => {
+    expect(validateStatusTransition("SETTLED", "NEW")).not.toBeNull();
+    expect(validateStatusTransition("SETTLED", "COOKING")).not.toBeNull();
+  });
+
+  it("rejects unknown statuses", () => {
+    expect(validateStatusTransition("UNKNOWN", "NEW")).not.toBeNull();
+  });
+});
+
+describe("buildStatusUpdateData edge cases", () => {
+  it("sets no timestamp for NEW status", () => {
+    const result = buildStatusUpdateData("NEW", { confirmedAt: null, status: "NEW" });
+    expect(result.status).toBe("NEW");
+    expect(Object.keys(result)).toEqual(["status"]);
+  });
+
+  it("sets settledAt for SETTLED", () => {
+    const result = buildStatusUpdateData("SETTLED", { confirmedAt: new Date(), status: "BILLED" });
+    expect(result.settledAt).toBeInstanceOf(Date);
+  });
+});
+
+describe("settleOrder edge cases", () => {
+  it("returns null when upsertCustomer returns null", async () => {
+    vi.mocked(orderRepository.countOtherActiveOnTable).mockResolvedValue(0);
+    vi.mocked(tableRepository.update).mockResolvedValue({} as never);
+    vi.mocked(upsertCustomer).mockResolvedValue(null);
+
+    const result = await settleOrder(
+      "order-1",
+      { tableId: "table-1", restaurantId: "rest-1" },
+      { customerPhone: "1234567890", customerName: null, customerId: null, restaurantId: "rest-1", total: 100 }
+    );
+
+    expect(upsertCustomer).toHaveBeenCalled();
+    expect(result).toBeNull();
+  });
+});
+
+describe("createOrder edge cases", () => {
+  it("throws when table is deleted", async () => {
+    vi.mocked(tableRepository.findByIdFull).mockResolvedValue({
+      id: "table-1",
+      isDeleted: true,
+      status: "FREE",
+    } as never);
+
+    await expect(
+      createOrder({
+        tableId: "table-1",
+        customerPhone: "1234567890",
+        items: [{ menuItemId: "item-1", quantity: 1 }],
+      })
+    ).rejects.toThrow("Table not found");
+  });
+
+  it("uses empty string for customerName when not provided", async () => {
+    vi.mocked(tableRepository.findByIdFull).mockResolvedValue({
+      id: "table-1",
+      isDeleted: false,
+      status: "FREE",
+      restaurantId: "rest-1",
+    } as never);
+    vi.mocked(prisma.menuItem.findMany).mockResolvedValue([
+      { id: "item-1", price: 100 },
+    ] as never);
+    vi.mocked(prisma.order.count).mockResolvedValue(0);
+    vi.mocked(upsertCustomer).mockResolvedValue("cust-1");
+    vi.mocked(orderRepository.create).mockImplementation(async (data: any) => ({ id: "o-1", ...data }));
+    vi.mocked(tableRepository.update).mockResolvedValue({} as never);
+
+    await createOrder({
+      tableId: "table-1",
+      customerPhone: "1234567890",
+      items: [{ menuItemId: "item-1", quantity: 1 }],
+    });
+
+    expect(orderRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ customerName: "" })
+    );
   });
 });

@@ -170,4 +170,94 @@ describe("verifyAndSend", () => {
       })
     ).rejects.toThrow("Campaign not found");
   });
+
+  it("creates deliveries and returns success on valid payment", async () => {
+    vi.mocked(verifyOrderPaymentSignature).mockReturnValue(true);
+    vi.mocked(prisma.campaign.findFirst).mockResolvedValue({
+      id: "camp-1",
+      scheduledAt: null,
+    } as never);
+    vi.mocked(prisma.customer.findMany).mockResolvedValue([
+      { id: "cust-1" },
+      { id: "cust-2" },
+    ] as never);
+
+    const result = await verifyAndSend("camp-1", "rest-1", {
+      razorpay_payment_id: "pay_1",
+      razorpay_order_id: "ord_1",
+      razorpay_signature: "valid",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.message).toContain("Campaign is being sent");
+  });
+
+  it("sets SCHEDULED status when scheduledAt is in the future", async () => {
+    vi.mocked(verifyOrderPaymentSignature).mockReturnValue(true);
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 7);
+    vi.mocked(prisma.campaign.findFirst).mockResolvedValue({
+      id: "camp-1",
+      scheduledAt: futureDate,
+    } as never);
+    vi.mocked(prisma.customer.findMany).mockResolvedValue([{ id: "cust-1" }] as never);
+
+    const result = await verifyAndSend("camp-1", "rest-1", {
+      razorpay_payment_id: "pay_1",
+      razorpay_order_id: "ord_1",
+      razorpay_signature: "valid",
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("createDraft edge cases", () => {
+  it("trims title and message whitespace", async () => {
+    vi.mocked(prisma.customer.count).mockResolvedValue(5);
+    vi.mocked(campaignRepository.create).mockImplementation(async (data: any) => data);
+
+    await createDraft("rest-1", { title: "  Sale  ", message: "  50% off  " });
+
+    expect(campaignRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Sale", message: "50% off" })
+    );
+  });
+
+  it("sets scheduledAt from input", async () => {
+    vi.mocked(prisma.customer.count).mockResolvedValue(5);
+    vi.mocked(campaignRepository.create).mockImplementation(async (data: any) => data);
+
+    await createDraft("rest-1", {
+      title: "Sale",
+      message: "off",
+      scheduledAt: "2026-04-01T10:00:00Z",
+    });
+
+    expect(campaignRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ scheduledAt: expect.any(Date) })
+    );
+  });
+
+  it("sets null scheduledAt when not provided", async () => {
+    vi.mocked(prisma.customer.count).mockResolvedValue(5);
+    vi.mocked(campaignRepository.create).mockImplementation(async (data: any) => data);
+
+    await createDraft("rest-1", { title: "Sale", message: "off" });
+
+    expect(campaignRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ scheduledAt: null })
+    );
+  });
+
+  it("defaults imageUrl to empty string", async () => {
+    vi.mocked(prisma.customer.count).mockResolvedValue(5);
+    vi.mocked(campaignRepository.create).mockImplementation(async (data: any) => data);
+
+    await createDraft("rest-1", { title: "Sale", message: "off" });
+
+    expect(campaignRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ imageUrl: "" })
+    );
+  });
 });
