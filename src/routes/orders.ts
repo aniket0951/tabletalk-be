@@ -5,7 +5,7 @@ import { emitSocketEvent } from "../lib/socket";
 import { requireRestaurant } from "../middleware/require-restaurant";
 import { CTX, ORDER_STATUS, SOCKET_EVENT } from "../lib/constants";
 import { orderRepository } from "../repositories/order.repository";
-import { orderService, OrderError } from "../services/order.service";
+import { orderService, OrderError, validateStatusTransition } from "../services/order.service";
 import type { Env } from "../types";
 
 export const ordersRoutes = new Hono<Env>();
@@ -100,6 +100,10 @@ ordersRoutes.patch("/:id", async (c) => {
     const updateData: Record<string, unknown> = {};
 
     if (body.status) {
+      const transitionError = validateStatusTransition(existing.status, body.status);
+      if (transitionError) {
+        return c.json({ error: transitionError }, 400);
+      }
       Object.assign(updateData, orderService.buildStatusUpdateData(body.status, existing));
     }
 

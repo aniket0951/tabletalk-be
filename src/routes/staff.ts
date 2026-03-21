@@ -67,7 +67,7 @@ staffRoutes.patch("/:id", async (c) => {
     const id = c.req.param("id");
 
     const existing = await staffRepository.findById(id);
-    if (!existing || existing.restaurantId !== restaurantId || existing.isDeleted) {
+    if (!existing || existing.restaurantId !== restaurantId) {
       return c.json({ error: "Not found" }, 404);
     }
 
@@ -110,7 +110,7 @@ staffRoutes.delete("/:id", async (c) => {
     const id = c.req.param("id");
 
     const existing = await staffRepository.findById(id);
-    if (!existing || existing.restaurantId !== restaurantId || existing.isDeleted) {
+    if (!existing || existing.restaurantId !== restaurantId) {
       return c.json({ error: "Not found" }, 404);
     }
 

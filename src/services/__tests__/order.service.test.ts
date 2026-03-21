@@ -7,6 +7,7 @@ vi.mock("../../lib/prisma", () => ({
     diningTable: { update: vi.fn() },
     order: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       count: vi.fn(),
@@ -199,23 +200,19 @@ describe("settleOrder", () => {
 
 describe("generateOrderCode", () => {
   it("returns ORD001 when no previous orders", async () => {
-    vi.mocked(orderRepository.findLastByRestaurant).mockResolvedValue(null);
+    vi.mocked(prisma.order.count).mockResolvedValue(0);
     const code = await generateOrderCode("rest-1");
     expect(code).toBe("ORD001");
   });
 
-  it("increments from last order code", async () => {
-    vi.mocked(orderRepository.findLastByRestaurant).mockResolvedValue({
-      orderCode: "ORD042",
-    } as never);
+  it("increments based on count", async () => {
+    vi.mocked(prisma.order.count).mockResolvedValue(42);
     const code = await generateOrderCode("rest-1");
     expect(code).toBe("ORD043");
   });
 
   it("pads to 3 digits", async () => {
-    vi.mocked(orderRepository.findLastByRestaurant).mockResolvedValue({
-      orderCode: "ORD009",
-    } as never);
+    vi.mocked(prisma.order.count).mockResolvedValue(9);
     const code = await generateOrderCode("rest-1");
     expect(code).toBe("ORD010");
   });
@@ -280,7 +277,7 @@ describe("createOrder", () => {
       { id: "item-1", price: 200 },
       { id: "item-2", price: 300 },
     ] as never);
-    vi.mocked(orderRepository.findLastByRestaurant).mockResolvedValue(null);
+    vi.mocked(prisma.order.count).mockResolvedValue(0);
     vi.mocked(upsertCustomer).mockResolvedValue("cust-1");
     vi.mocked(orderRepository.create).mockImplementation(async (data: any) => ({
       id: "order-1",

@@ -96,6 +96,8 @@ model MenuItem {
   createdAt     DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   isDeleted    Boolean      @default(false)
+
+  @@index([categoryId])
 }
 
 model DiningTable {
@@ -142,6 +144,11 @@ model Order {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   isDeleted     Boolean     @default(false)
+
+  @@index([restaurantId, placedAt])
+  @@index([restaurantId, status])
+  @@index([tableId, status])
+  @@index([customerPhone])
 }
 
 model Staff {

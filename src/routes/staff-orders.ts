@@ -4,7 +4,7 @@ import { staffAuth } from "../middleware/staff-auth";
 import { emitSocketEvent } from "../lib/socket";
 import { ORDER_STATUS, SOCKET_EVENT } from "../lib/constants";
 import { orderRepository } from "../repositories/order.repository";
-import { orderService } from "../services/order.service";
+import { orderService, validateStatusTransition } from "../services/order.service";
 import type { Env } from "../types";
 
 // Lean select for staff order cards — only what the UI needs
@@ -64,6 +64,11 @@ staffOrdersRoutes.patch("/:id", async (c) => {
     const existing = await orderRepository.findById(id);
     if (!existing || existing.restaurantId !== payload.restaurantId) {
       return c.json({ error: "Not found" }, 404);
+    }
+
+    const transitionError = validateStatusTransition(existing.status, status);
+    if (transitionError) {
+      return c.json({ error: transitionError }, 400);
     }
 
     const updateData = orderService.buildStatusUpdateData(status, existing);

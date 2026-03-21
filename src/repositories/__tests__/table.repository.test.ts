@@ -29,10 +29,11 @@ describe("findMany", () => {
 });
 
 describe("findById", () => {
-  it("finds table by id", async () => {
-    prismaMock.diningTable.findUnique.mockResolvedValue({ id: "t-1" });
+  it("finds table by id excluding deleted", async () => {
+    prismaMock.diningTable.findFirst.mockResolvedValue({ id: "t-1" });
     const result = await findById("t-1");
     expect(result).toEqual({ id: "t-1" });
+    expect(prismaMock.diningTable.findFirst).toHaveBeenCalledWith({ where: { id: "t-1", isDeleted: false } });
   });
 });
 

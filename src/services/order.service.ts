@@ -24,9 +24,24 @@ export function parseDateFilter(from?: string, to?: string): Record<string, Date
   return dateFilter;
 }
 
+const validTransitions: Record<string, string[]> = {
+  NEW: ["COOKING"],
+  COOKING: ["READY"],
+  READY: ["BILLED"],
+  BILLED: ["SETTLED"],
+};
+
+export function validateStatusTransition(currentStatus: string, newStatus: string): string | null {
+  const allowed = validTransitions[currentStatus];
+  if (!allowed || !allowed.includes(newStatus)) {
+    return `Cannot transition from ${currentStatus} to ${newStatus}`;
+  }
+  return null;
+}
+
 export function buildStatusUpdateData(
   newStatus: string,
-  existing: { confirmedAt: Date | null }
+  existing: { confirmedAt: Date | null; status: string }
 ): Record<string, unknown> {
   const updateData: Record<string, unknown> = { status: newStatus };
   if (timestampMap[newStatus]) {
@@ -68,12 +83,9 @@ export async function settleOrder(
 }
 
 export async function generateOrderCode(restaurantId: string): Promise<string> {
-  const lastOrder = await orderRepository.findLastByRestaurant(restaurantId);
-  let nextNum = 1;
-  if (lastOrder?.orderCode) {
-    const match = lastOrder.orderCode.match(/\d+/);
-    if (match) nextNum = parseInt(match[0], 10) + 1;
-  }
+  const { prisma } = await import("../lib/prisma");
+  const countResult = await prisma.order.count({ where: { restaurantId } });
+  const nextNum = countResult + 1;
   return `ORD${String(nextNum).padStart(3, "0")}`;
 }
 
@@ -170,6 +182,7 @@ export class OrderError extends Error {
 export const orderService = {
   timestampMap,
   parseDateFilter,
+  validateStatusTransition,
   buildStatusUpdateData,
   settleOrder,
   generateOrderCode,

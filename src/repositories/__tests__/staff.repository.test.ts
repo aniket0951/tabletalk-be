@@ -34,10 +34,11 @@ describe("findMany", () => {
 });
 
 describe("findById", () => {
-  it("finds staff by id", async () => {
-    prismaMock.staff.findUnique.mockResolvedValue({ id: "s-1" });
+  it("finds staff by id excluding deleted", async () => {
+    prismaMock.staff.findFirst.mockResolvedValue({ id: "s-1" });
     const result = await findById("s-1");
     expect(result).toEqual({ id: "s-1" });
+    expect(prismaMock.staff.findFirst).toHaveBeenCalledWith({ where: { id: "s-1", isDeleted: false } });
   });
 });
 

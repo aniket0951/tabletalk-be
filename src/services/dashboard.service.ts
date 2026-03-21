@@ -3,12 +3,14 @@ import { tableRepository } from "../repositories/table.repository";
 import { TABLE_STATUS } from "../lib/constants";
 
 export async function getStats(restaurantId: string) {
-  const allOrders = await prisma.order.findMany({
+  const orderAgg = await prisma.order.aggregate({
     where: { restaurantId },
+    _sum: { total: true },
+    _count: true,
   });
 
-  const revenue = allOrders.reduce((sum: number, o: { total: number }) => sum + o.total, 0);
-  const count = allOrders.length;
+  const revenue = orderAgg._sum.total || 0;
+  const count = orderAgg._count;
   const avgValue = count > 0 ? Math.round(revenue / count) : 0;
 
   const [activeTables, totalTables] = await Promise.all([

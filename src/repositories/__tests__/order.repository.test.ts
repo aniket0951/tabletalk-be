@@ -75,13 +75,13 @@ describe("countByStatus", () => {
 });
 
 describe("findById", () => {
-  it("finds order by id", async () => {
+  it("finds order by id excluding deleted", async () => {
     const order = { id: "ord-1", status: "NEW" };
-    prismaMock.order.findUnique.mockResolvedValue(order);
+    prismaMock.order.findFirst.mockResolvedValue(order);
 
     const result = await findById("ord-1");
     expect(result).toEqual(order);
-    expect(prismaMock.order.findUnique).toHaveBeenCalledWith({ where: { id: "ord-1" } });
+    expect(prismaMock.order.findFirst).toHaveBeenCalledWith({ where: { id: "ord-1", isDeleted: false } });
   });
 });
 

@@ -66,6 +66,9 @@ publicRoutes.get("/menu/:restaurantId/category/:categoryId", async (c) => {
     });
     if (!category) return c.json({ error: "Category not found" }, 404);
 
+    const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(c.req.query("limit") || "50", 10)));
+
     const items = await prisma.menuItem.findMany({
       where: { categoryId, available: true, isDeleted: false },
       select: {
@@ -81,6 +84,8 @@ publicRoutes.get("/menu/:restaurantId/category/:categoryId", async (c) => {
         ratingCount: true,
       },
       orderBy: { averageRating: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
     });
 
     return c.json(items);

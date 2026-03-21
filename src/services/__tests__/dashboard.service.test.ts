@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../lib/prisma", () => ({
   prisma: {
-    order: { findMany: vi.fn() },
+    order: { aggregate: vi.fn(), findMany: vi.fn() },
     orderItem: { findMany: vi.fn() },
   },
 }));
@@ -24,9 +24,11 @@ beforeEach(() => {
 
 describe("getStats", () => {
   it("returns correct stats for empty restaurant", async () => {
-    vi.mocked(prisma.order.findMany)
-      .mockResolvedValueOnce([]) // allOrders
-      .mockResolvedValueOnce([]); // weekOrders
+    vi.mocked(prisma.order.aggregate).mockResolvedValue({
+      _sum: { total: null },
+      _count: 0,
+    } as never);
+    vi.mocked(prisma.order.findMany).mockResolvedValue([]); // weekOrders
     vi.mocked(tableRepository.countByStatus).mockResolvedValue(0);
     vi.mocked(tableRepository.countActive).mockResolvedValue(0);
     vi.mocked(prisma.orderItem.findMany).mockResolvedValue([]);
@@ -45,14 +47,16 @@ describe("getStats", () => {
   });
 
   it("calculates revenue and averages correctly", async () => {
-    const orders = [
+    const weekOrders = [
       { total: 200, placedAt: new Date() },
       { total: 300, placedAt: new Date() },
       { total: 500, placedAt: new Date() },
     ];
-    vi.mocked(prisma.order.findMany)
-      .mockResolvedValueOnce(orders as never)
-      .mockResolvedValueOnce(orders as never);
+    vi.mocked(prisma.order.aggregate).mockResolvedValue({
+      _sum: { total: 1000 },
+      _count: 3,
+    } as never);
+    vi.mocked(prisma.order.findMany).mockResolvedValue(weekOrders as never);
     vi.mocked(tableRepository.countByStatus).mockResolvedValue(2);
     vi.mocked(tableRepository.countActive).mockResolvedValue(5);
     vi.mocked(prisma.orderItem.findMany).mockResolvedValue([
@@ -75,9 +79,11 @@ describe("getStats", () => {
   });
 
   it("limits top items to 5", async () => {
-    vi.mocked(prisma.order.findMany)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+    vi.mocked(prisma.order.aggregate).mockResolvedValue({
+      _sum: { total: 0 },
+      _count: 0,
+    } as never);
+    vi.mocked(prisma.order.findMany).mockResolvedValue([]);
     vi.mocked(tableRepository.countByStatus).mockResolvedValue(0);
     vi.mocked(tableRepository.countActive).mockResolvedValue(0);
 

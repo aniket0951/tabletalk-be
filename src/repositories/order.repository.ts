@@ -27,7 +27,7 @@ export function countByStatus(baseWhere: Record<string, unknown>) {
 }
 
 export function findById(id: string) {
-  return prisma.order.findUnique({ where: { id } });
+  return prisma.order.findFirst({ where: { id, isDeleted: false } });
 }
 
 export function findByIdWithDetail(id: string) {

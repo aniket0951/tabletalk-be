@@ -9,7 +9,7 @@ export function findMany(restaurantId: string) {
 }
 
 export function findById(id: string) {
-  return prisma.staff.findUnique({ where: { id } });
+  return prisma.staff.findFirst({ where: { id, isDeleted: false } });
 }
 
 export function findAllActive(restaurantId: string) {

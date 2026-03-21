@@ -8,8 +8,8 @@ import type { Env } from "../types";
 
 export const staffAuthRoutes = new Hono<Env>();
 
-// POST /staff/auth/login — 10 attempts per 15 minutes (4-digit PIN is brute-forceable)
-staffAuthRoutes.post("/login", rateLimit(10, 15 * 60 * 1000), async (c) => {
+// POST /staff/auth/login — 5 attempts per 15 minutes (4-digit PIN is brute-forceable)
+staffAuthRoutes.post("/login", rateLimit(5, 15 * 60 * 1000), async (c) => {
   try {
     const { restaurantCode, pin } = await c.req.json();
 
