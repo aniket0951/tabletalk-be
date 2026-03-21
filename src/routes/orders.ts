@@ -43,15 +43,7 @@ ordersRoutes.get("/", async (c) => {
         : {}),
     };
 
-    if (!pageParam) {
-      const orders = await orderRepository.findMany({
-        ...baseWhere,
-        ...(status ? { status: status as never } : {}),
-      });
-      return c.json(orders);
-    }
-
-    const page = Math.max(1, parseInt(pageParam, 10));
+    const page = Math.max(1, parseInt(pageParam || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(limitParam || "20", 10)));
 
     const filteredWhere = { ...baseWhere, ...(status && status !== "ALL" ? { status: status as never } : {}) };
