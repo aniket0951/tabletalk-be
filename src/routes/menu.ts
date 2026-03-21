@@ -1,9 +1,8 @@
 import { Hono } from "hono";
 import { ownerAuth } from "../middleware/owner-auth";
 import { subscriptionGuard } from "../middleware/subscription-guard";
-import { emitSocketEvent } from "../lib/socket";
 import { requireRestaurant } from "../middleware/require-restaurant";
-import { CTX, SOCKET_EVENT } from "../lib/constants";
+import { CTX } from "../lib/constants";
 import { menuRepository } from "../repositories/menu.repository";
 import { menuService, MenuError } from "../services/menu.service";
 import type { Env } from "../types";
@@ -58,7 +57,6 @@ menuRoutes.post("/items", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const body = await c.req.json();
     const item = await menuService.createItem(restaurantId, body);
-    emitSocketEvent(SOCKET_EVENT.MENU_UPDATED, item);
     return c.json(item);
   } catch (err) {
     if (err instanceof MenuError) return c.json({ error: err.message }, err.statusCode as 400);
@@ -84,7 +82,6 @@ menuRoutes.patch("/items/:id", async (c) => {
     }
 
     const item = await menuRepository.updateItem(id, result);
-    emitSocketEvent(SOCKET_EVENT.MENU_UPDATED, item);
     return c.json(item);
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -103,7 +100,6 @@ menuRoutes.delete("/items/:id", async (c) => {
     }
 
     await menuRepository.deleteItem(id);
-    emitSocketEvent(SOCKET_EVENT.MENU_UPDATED, { id, deleted: true });
     return c.json({ success: true });
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -116,7 +112,6 @@ menuRoutes.post("/categories", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const { name, emoji } = await c.req.json();
     const category = await menuService.createCategory(restaurantId, name, emoji);
-    emitSocketEvent(SOCKET_EVENT.MENU_UPDATED, category);
     return c.json(category);
   } catch (err) {
     if (err instanceof MenuError) return c.json({ error: err.message }, err.statusCode as 400);

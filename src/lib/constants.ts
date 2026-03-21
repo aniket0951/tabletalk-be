@@ -78,5 +78,4 @@ export const SOCKET_EVENT = {
   ORDER_CREATED: "order:created",
   ORDER_UPDATED: "order:updated",
   TABLE_UPDATED: "table:updated",
-  MENU_UPDATED: "menu:updated",
 } as const;
