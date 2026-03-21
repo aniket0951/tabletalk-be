@@ -97,7 +97,7 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy to Staging
-        run: railway up
+        run: railway up --service ${{ vars.RAILWAY_SERVICE_NAME }}
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
@@ -126,7 +126,7 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy to Production
-        run: railway up
+        run: railway up --service ${{ vars.RAILWAY_SERVICE_NAME }}
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
