@@ -12,6 +12,10 @@ on:
         required: false
         default: "false"
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   test:
     name: Test
@@ -68,79 +72,75 @@ jobs:
         id: summary
         if: always()
         run: |
-          # Extract pass/fail counts from vitest output
-          passed=$(grep -oP 'Tests\s+\K\d+(?=\s+passed)' test-results.txt || echo "0")
-          failed=$(grep -oP 'Tests\s+\K\d+(?=\s+failed)' test-results.txt || echo "0")
-          total=$((passed + failed))
+          # Use node to parse vitest output reliably (avoids grep multiline issues)
+          node -e "
+            const fs = require('fs');
+            const txt = fs.readFileSync('test-results.txt', 'utf8');
 
-          if [ "$total" -eq 0 ]; then
-            passed=$(grep -c "✓\|✔\|PASS" test-results.txt || echo "0")
-            failed=$(grep -c "✗\|✘\|FAIL" test-results.txt || echo "0")
-            total=$((passed + failed))
-          fi
+            // Vitest summary line: 'Tests  166 passed (166)' or 'Tests  2 failed | 164 passed (166)'
+            const passMatch = txt.match(/(\d+)\s+passed/);
+            const failMatch = txt.match(/(\d+)\s+failed/);
+            const passed = passMatch ? parseInt(passMatch[1]) : 0;
+            const failed = failMatch ? parseInt(failMatch[1]) : 0;
+            const total = passed + failed;
 
-          # Extract coverage from json-summary
-          if [ -f coverage/coverage-summary.json ]; then
-            statement_coverage=$(node -e "const c=require('./coverage/coverage-summary.json');console.log(c.total.statements.pct)")
-            branch_coverage=$(node -e "const c=require('./coverage/coverage-summary.json');console.log(c.total.branches.pct)")
-            function_coverage=$(node -e "const c=require('./coverage/coverage-summary.json');console.log(c.total.functions.pct)")
-            line_coverage=$(node -e "const c=require('./coverage/coverage-summary.json');console.log(c.total.lines.pct)")
+            let coverage = { statement: 0, branch: 0, function: 0, line: 0, overall: 0 };
+            try {
+              const c = require('./coverage/coverage-summary.json').total;
+              coverage.statement = c.statements.pct;
+              coverage.branch = c.branches.pct;
+              coverage.function = c.functions.pct;
+              coverage.line = c.lines.pct;
+              coverage.overall = Number(((c.statements.pct * 0.4) + (c.branches.pct * 0.25) + (c.functions.pct * 0.2) + (c.lines.pct * 0.15)).toFixed(1));
+            } catch {}
 
-            overall_coverage=$(node -e "
-              const c=require('./coverage/coverage-summary.json').total;
-              const avg=((c.statements.pct*0.4)+(c.branches.pct*0.25)+(c.functions.pct*0.2)+(c.lines.pct*0.15)).toFixed(1);
-              console.log(avg)
-            ")
-          else
-            statement_coverage="0"
-            branch_coverage="0"
-            function_coverage="0"
-            line_coverage="0"
-            overall_coverage="0"
-          fi
+            const successRate = total > 0 ? Number(((passed * 100) / total).toFixed(2)) : 0;
 
-          # Build coverage JSON for global service
-          cat > coverage.json << EOF
-          {
-            "repository": "${{ github.repository }}",
-            "branch": "${{ github.ref_name }}",
-            "commit_sha": "${{ github.sha }}",
-            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "total_coverage": $overall_coverage,
-            "statement_coverage": $statement_coverage,
-            "function_coverage": $function_coverage,
-            "branch_coverage": $branch_coverage,
-            "line_coverage": $line_coverage,
-            "coverage_type": "nodejs",
-            "workflow_run_id": "${{ github.run_id }}",
-            "test_results": {
-              "total_tests": $total,
-              "passed_tests": $passed,
-              "failed_tests": $failed,
-              "success_rate": $(node -e "console.log($total>0?($passed*100/$total).toFixed(2):0)")
+            // Write coverage.json
+            const report = {
+              repository: process.env.GITHUB_REPOSITORY,
+              branch: process.env.GITHUB_REF_NAME,
+              commit_sha: process.env.GITHUB_SHA,
+              timestamp: new Date().toISOString(),
+              total_coverage: coverage.overall,
+              statement_coverage: coverage.statement,
+              function_coverage: coverage.function,
+              branch_coverage: coverage.branch,
+              line_coverage: coverage.line,
+              coverage_type: 'nodejs',
+              workflow_run_id: process.env.GITHUB_RUN_ID,
+              test_results: { total_tests: total, passed_tests: passed, failed_tests: failed, success_rate: successRate }
+            };
+            fs.writeFileSync('coverage.json', JSON.stringify(report, null, 2));
+            console.log('Generated coverage.json:');
+            console.log(JSON.stringify(report, null, 2));
+
+            // Write GITHUB_OUTPUT
+            const out = fs.openSync(process.env.GITHUB_OUTPUT, 'a');
+            const write = (k, v) => fs.writeSync(out, k + '=' + v + '\n');
+            write('passed', passed);
+            write('failed', failed);
+            write('total', total);
+            write('summary', '✅ ' + passed + ' passed, ❌ ' + failed + ' failed, 🔢 ' + total + ' total');
+            write('function_coverage', '📊 Function Coverage: ' + coverage.function + '%');
+            write('statement_coverage', '📊 Statement Coverage: ' + coverage.statement + '%');
+            write('branch_coverage', '🌿 Branch Coverage: ' + coverage.branch + '%');
+            write('line_coverage', '🛤️ Line Coverage: ' + coverage.line + '%');
+            write('overall_coverage', '🎯 Overall Coverage: ' + coverage.overall + '%');
+
+            if (failed > 0) {
+              const failedLines = txt.split('\n').filter(l => /FAIL|✗|✘/.test(l) && !/Test Files/.test(l)).slice(0, 20).map(l => '- \`' + l.trim() + '\`').join('\n');
+              fs.writeSync(out, 'failed_tests<<ENDOFTESTS\n' + failedLines + '\nENDOFTESTS\n');
+            } else {
+              write('failed_tests', 'None');
             }
-          }
-          EOF
-
-          echo "Generated coverage.json:"
-          cat coverage.json
-
-          # Extract failed test names for PR comment
-          if [ "$failed" -gt 0 ]; then
-            failed_list=$(grep -E "FAIL|✗|✘" test-results.txt | grep -v "Test Files" | head -20 | sed 's/^/- `/' | sed 's/$/`/')
-            echo "failed_tests<<EOF" >> $GITHUB_OUTPUT
-            echo "$failed_list" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "failed_tests=None" >> $GITHUB_OUTPUT
-          fi
-
-          echo "summary=✅ $passed passed, ❌ $failed failed, 🔢 $total total" >> $GITHUB_OUTPUT
-          echo "function_coverage=📊 Function Coverage: ${function_coverage}%" >> $GITHUB_OUTPUT
-          echo "statement_coverage=📊 Statement Coverage: ${statement_coverage}%" >> $GITHUB_OUTPUT
-          echo "branch_coverage=🌿 Branch Coverage: ${branch_coverage}%" >> $GITHUB_OUTPUT
-          echo "line_coverage=🛤️ Line Coverage: ${line_coverage}%" >> $GITHUB_OUTPUT
-          echo "overall_coverage=🎯 Overall Coverage: ${overall_coverage}%" >> $GITHUB_OUTPUT
+            fs.closeSync(out);
+          "
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
 
       - name: List Failed Test Cases
         if: always()
@@ -191,3 +191,4 @@ jobs:
             coverage/
             test-results.txt
           retention-days: 30
+
