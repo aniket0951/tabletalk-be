@@ -1,9 +1,8 @@
 import { Hono } from "hono";
 import { ownerAuth } from "../middleware/owner-auth";
 import { subscriptionGuard } from "../middleware/subscription-guard";
-import { emitSocketEvent } from "../lib/socket";
 import { requireRestaurant } from "../middleware/require-restaurant";
-import { CTX, STAFF_ROLE, SOCKET_EVENT } from "../lib/constants";
+import { CTX, STAFF_ROLE } from "../lib/constants";
 import { staffRepository } from "../repositories/staff.repository";
 import { staffService } from "../services/staff.service";
 import type { Env } from "../types";
@@ -53,7 +52,6 @@ staffRoutes.post("/", async (c) => {
       restaurantId,
     });
 
-    emitSocketEvent(SOCKET_EVENT.STAFF_CREATED, staff);
     return c.json(staff);
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -96,7 +94,6 @@ staffRoutes.patch("/:id", async (c) => {
 
     const staff = await staffRepository.update(id, data);
 
-    emitSocketEvent(SOCKET_EVENT.STAFF_UPDATED, staff);
     return c.json(staff);
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -116,7 +113,6 @@ staffRoutes.delete("/:id", async (c) => {
 
     await staffRepository.softDelete(id);
 
-    emitSocketEvent(SOCKET_EVENT.STAFF_DELETED, { id });
     return c.json({ success: true });
   } catch {
     return c.json({ error: "Server error" }, 500);

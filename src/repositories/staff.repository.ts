@@ -1,10 +1,20 @@
 import { prisma } from "../lib/prisma";
 
+const selectStaff = {
+  id: true,
+  employeeId: true,
+  name: true,
+  phone: true,
+  role: true,
+  restaurantId: true,
+  createdAt: true,
+} as const;
+
 export function findMany(restaurantId: string) {
   return prisma.staff.findMany({
     where: { restaurantId, isDeleted: false },
     orderBy: { createdAt: "asc" as const },
-    select: { id: true, employeeId: true, name: true, phone: true, role: true, restaurantId: true, createdAt: true },
+    select: selectStaff,
   });
 }
 
@@ -24,7 +34,9 @@ export function findAllActiveExcept(restaurantId: string, excludeId: string) {
   });
 }
 
-export function create(data: Parameters<typeof prisma.staff.create>[0]["data"]) {
+export function create(
+  data: Parameters<typeof prisma.staff.create>[0]["data"],
+) {
   return prisma.staff.create({ data });
 }
 
