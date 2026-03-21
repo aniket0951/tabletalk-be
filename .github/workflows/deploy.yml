@@ -99,7 +99,7 @@ jobs:
       - name: Deploy to Staging
         run: railway up
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Deployment Summary
         run: |
@@ -128,7 +128,7 @@ jobs:
       - name: Deploy to Production
         run: railway up
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PRODUCTION }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Deployment Summary
         run: |
