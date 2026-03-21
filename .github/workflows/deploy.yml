@@ -15,63 +15,75 @@ on:
         required: true
         type: string
 
-jobs:
-  validate:
-    name: Validate Tests Passed
-    runs-on: ubuntu-latest
+permissions:
+  contents: read
 
+jobs:
+  confirm:
+    name: Confirm Intent
+    runs-on: ubuntu-latest
     steps:
-      - name: Confirm deployment intent
+      - name: Validate confirmation
         if: inputs.confirm_deploy != 'deploy'
         run: |
           echo "Deployment not confirmed. You must type 'deploy' to proceed."
           exit 1
 
-      - name: Check latest test run on this branch
-        uses: actions/github-script@v7
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: confirm
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tabletalk_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          script: |
-            const branch = context.ref.replace('refs/heads/', '');
-            console.log(`Checking test results for branch: ${branch}`);
+          node-version: "20"
+          cache: "npm"
 
-            // Find the latest "carplus tests" workflow run on this branch
-            const runs = await github.rest.actions.listWorkflowRuns({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'tests.yml',
-              branch: branch,
-              status: 'completed',
-              per_page: 1,
-            });
+      - name: Install dependencies
+        run: npm ci
 
-            if (runs.data.workflow_runs.length === 0) {
-              core.setFailed(`No test runs found for branch '${branch}'. Run tests first.`);
-              return;
-            }
+      - name: Generate Prisma client
+        run: npx prisma generate
 
-            const latestRun = runs.data.workflow_runs[0];
-            console.log(`Latest test run: #${latestRun.run_number} - ${latestRun.conclusion}`);
-            console.log(`Commit: ${latestRun.head_sha}`);
-            console.log(`Current commit: ${context.sha}`);
+      - name: Run Prisma migrations
+        run: npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tabletalk_test
 
-            if (latestRun.conclusion !== 'success') {
-              core.setFailed(`Latest test run failed (${latestRun.conclusion}). Fix tests before deploying.`);
-              return;
-            }
+      - name: Type check
+        run: npx tsc --noEmit
 
-            if (latestRun.head_sha !== context.sha) {
-              core.setFailed(
-                `Tests passed on commit ${latestRun.head_sha.slice(0, 7)}, but you're deploying commit ${context.sha.slice(0, 7)}. Push and wait for tests to pass first.`
-              );
-              return;
-            }
-
-            console.log('All tests passed on current commit. Proceeding to deploy.');
+      - name: Run Tests
+        run: npx vitest run --reporter=verbose
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tabletalk_test
+          JWT_SECRET: test-secret-key
+          STAFF_JWT_SECRET: test-staff-secret-key
 
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    needs: validate
+    needs: test
     if: inputs.environment == 'staging'
     environment:
       name: staging
@@ -100,7 +112,7 @@ jobs:
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: validate
+    needs: test
     if: inputs.environment == 'production'
     environment:
       name: production
