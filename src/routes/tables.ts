@@ -39,7 +39,6 @@ tablesRoutes.post("/", async (c) => {
       restaurantId,
     });
 
-    emitSocketEvent(SOCKET_EVENT.TABLE_CREATED, table);
     return c.json(table);
   } catch {
     return c.json({ error: "Server error" }, 500);
@@ -101,7 +100,6 @@ tablesRoutes.delete("/:id", async (c) => {
     }
 
     await tableRepository.remove(id);
-    emitSocketEvent(SOCKET_EVENT.TABLE_DELETED, { id });
     return c.json({ success: true });
   } catch {
     return c.json({ error: "Server error" }, 500);

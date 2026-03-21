@@ -77,8 +77,6 @@ export const SERVICE_MODE = {
 export const SOCKET_EVENT = {
   ORDER_CREATED: "order:created",
   ORDER_UPDATED: "order:updated",
-  TABLE_CREATED: "table:created",
   TABLE_UPDATED: "table:updated",
-  TABLE_DELETED: "table:deleted",
   MENU_UPDATED: "menu:updated",
 } as const;
