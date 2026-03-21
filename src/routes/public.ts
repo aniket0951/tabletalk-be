@@ -108,10 +108,10 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
       return c.json({ error: "Phone number is required" }, 400);
     }
 
-    // Validate phone format (10-15 digits, optional + prefix)
-    const cleanPhone = String(customerPhone).replace(/[\s\-()]/g, "");
-    if (!/^\+?\d{10,15}$/.test(cleanPhone)) {
-      return c.json({ error: "Invalid phone number format" }, 400);
+    // Validate phone: exactly 10 digits (Indian mobile), optional +91 prefix
+    const cleanPhone = String(customerPhone).replace(/[\s\-()]/g, "").replace(/^\+91/, "");
+    if (!/^\d{10}$/.test(cleanPhone)) {
+      return c.json({ error: "Phone number must be exactly 10 digits" }, 400);
     }
 
     // Validate customer name length
@@ -141,7 +141,7 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
 
     const order = await orderService.createOrder({
       tableId,
-      customerPhone: customerPhone.trim(),
+      customerPhone: cleanPhone,
       customerName,
       specialNote,
       items,
