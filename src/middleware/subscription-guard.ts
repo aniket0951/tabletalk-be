@@ -12,10 +12,14 @@ export const subscriptionGuard = createMiddleware<Env>(async (c, next) => {
     return c.json({ error: "No subscription", code: "NO_SUBSCRIPTION" }, 402);
   }
 
-  // Check trial expiry
-  if (subscription.status === SUBSCRIPTION_STATUS.TRIAL && new Date() > subscription.endDate) {
+  // Check expiry for both trial and active subscriptions
+  if (
+    (subscription.status === SUBSCRIPTION_STATUS.TRIAL || subscription.status === SUBSCRIPTION_STATUS.ACTIVE) &&
+    new Date() > subscription.endDate
+  ) {
     await subscriptionRepository.update(subscription.id, { status: SUBSCRIPTION_STATUS.EXPIRED });
-    return c.json({ error: "Trial expired", code: "TRIAL_EXPIRED" }, 402);
+    const code = subscription.status === SUBSCRIPTION_STATUS.TRIAL ? "TRIAL_EXPIRED" : "SUBSCRIPTION_EXPIRED";
+    return c.json({ error: "Subscription expired", code }, 402);
   }
 
   const allowedStatuses: string[] = [SUBSCRIPTION_STATUS.TRIAL, SUBSCRIPTION_STATUS.ACTIVE];

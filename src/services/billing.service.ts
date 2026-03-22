@@ -45,6 +45,17 @@ export async function createCheckout(restaurantId: string, userId: string, plan:
     throw new BillingError("Invalid plan", 400);
   }
 
+  // Block checkout if already has active/trial subscription
+  const existing = await subscriptionRepository.findLatest(restaurantId);
+  if (existing && ([SUBSCRIPTION_STATUS.TRIAL, SUBSCRIPTION_STATUS.ACTIVE] as string[]).includes(existing.status)) {
+    // Check if active subscription is actually expired (auto-expire)
+    if (new Date() <= existing.endDate) {
+      throw new BillingError("Active subscription already exists. Cancel first or wait for it to expire.", 400);
+    }
+    // Expired — allow renewal
+    await subscriptionRepository.update(existing.id, { status: SUBSCRIPTION_STATUS.EXPIRED });
+  }
+
   const restaurant = await prisma.restaurant.findUnique({
     where: { id: restaurantId },
     include: { user: true },
