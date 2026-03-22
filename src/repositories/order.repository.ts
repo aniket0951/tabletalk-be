@@ -105,7 +105,7 @@ export function findByIdWithRestaurant(orderId: string) {
     where: { id: orderId },
     include: {
       ...orderDetailInclude,
-      restaurant: { select: { id: true, name: true } },
+      restaurant: { select: { id: true, name: true, phone: true } },
     },
   });
 }
