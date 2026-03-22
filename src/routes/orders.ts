@@ -6,6 +6,7 @@ import { requireRestaurant } from "../middleware/require-restaurant";
 import { CTX, ORDER_STATUS, SOCKET_EVENT } from "../lib/constants";
 import { orderRepository } from "../repositories/order.repository";
 import { orderService, OrderError, validateStatusTransition } from "../services/order.service";
+import { logAudit } from "../lib/audit";
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
 
@@ -120,6 +121,16 @@ ordersRoutes.patch("/:id", async (c) => {
       const updatedOrder = await orderService.settleOrder(id, existing, order);
       if (updatedOrder) order = updatedOrder;
     }
+
+    logAudit({
+      restaurantId,
+      actorType: "owner",
+      actorId: c.get(CTX.USER_ID),
+      action: body.status ? "order.status_changed" : "order.updated",
+      entity: "order",
+      entityId: id,
+      details: { from: existing.status, to: body.status, staffId: body.staffId },
+    });
 
     emitSocketEvent(SOCKET_EVENT.ORDER_UPDATED, order);
     return c.json(order);

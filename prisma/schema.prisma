@@ -338,6 +338,21 @@ enum TableStatus {
   OCCUPIED
 }
 
+model AuditLog {
+  id           String   @id @default(cuid())
+  restaurantId String
+  actorType    String   // "owner" | "staff" | "system"
+  actorId      String?  // userId or staffId
+  action       String   // e.g. "order.status_changed", "staff.created"
+  entity       String   // e.g. "order", "staff", "table"
+  entityId     String?
+  details      String?  // JSON string with before/after or extra context
+  createdAt    DateTime @default(now())
+
+  @@index([restaurantId, createdAt])
+  @@index([entity, entityId])
+}
+
 enum OrderStatus {
   NEW
   COOKING
