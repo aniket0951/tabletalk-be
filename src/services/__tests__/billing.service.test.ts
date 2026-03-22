@@ -199,6 +199,7 @@ describe("verifyPayment", () => {
     vi.mocked(subscriptionRepository.findByRazorpayOrderId).mockResolvedValue({
       id: "sub-1",
       plan: "STARTER",
+      status: "PENDING",
     } as never);
     const mockRzp = { payments: { fetch: vi.fn().mockResolvedValue({ method: "upi" }) } };
     vi.mocked(getRazorpay).mockReturnValue(mockRzp as never);
@@ -217,10 +218,51 @@ describe("verifyPayment", () => {
     }));
     expect(invoiceRepository.create).toHaveBeenCalledWith(expect.objectContaining({
       subscriptionId: "sub-1",
-      amount: 999, // 99900 / 100
+      amount: 999,
       status: "PAID",
       razorpayPaymentId: "pay_1",
     }));
+    expect(result).toEqual(expect.objectContaining({ status: "ACTIVE" }));
+  });
+
+  it("returns existing subscription if already active (idempotent)", async () => {
+    vi.mocked(verifyOrderPaymentSignature).mockReturnValue(true);
+    vi.mocked(subscriptionRepository.findByRazorpayOrderId).mockResolvedValue({
+      id: "sub-1",
+      plan: "STARTER",
+      status: "ACTIVE",
+    } as never);
+
+    const result = await verifyPayment({
+      razorpay_payment_id: "pay_1",
+      razorpay_order_id: "ord_1",
+      razorpay_signature: "valid",
+    });
+
+    expect(result).toEqual(expect.objectContaining({ id: "sub-1", status: "ACTIVE" }));
+    expect(subscriptionRepository.update).not.toHaveBeenCalled();
+    expect(invoiceRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("handles duplicate invoice gracefully", async () => {
+    vi.mocked(verifyOrderPaymentSignature).mockReturnValue(true);
+    vi.mocked(subscriptionRepository.findByRazorpayOrderId).mockResolvedValue({
+      id: "sub-1",
+      plan: "STARTER",
+      status: "PENDING",
+    } as never);
+    const mockRzp = { payments: { fetch: vi.fn().mockResolvedValue({ method: "card" }) } };
+    vi.mocked(getRazorpay).mockReturnValue(mockRzp as never);
+    vi.mocked(subscriptionRepository.update).mockResolvedValue({ id: "sub-1", status: "ACTIVE" } as never);
+    vi.mocked(invoiceRepository.create).mockRejectedValue(new Error("Unique constraint failed"));
+
+    const result = await verifyPayment({
+      razorpay_payment_id: "pay_1",
+      razorpay_order_id: "ord_1",
+      razorpay_signature: "valid",
+    });
+
+    // Should still succeed — invoice already exists
     expect(result).toEqual(expect.objectContaining({ status: "ACTIVE" }));
   });
 });
@@ -250,12 +292,13 @@ describe("handleWebhook", () => {
     vi.mocked(prisma.razorpayWebhookLog.updateMany).mockResolvedValue({} as never);
     vi.mocked(subscriptionRepository.findByRazorpayOrderId).mockResolvedValue({
       id: "sub-1",
+      status: "PENDING",
     } as never);
     vi.mocked(subscriptionRepository.update).mockResolvedValue({} as never);
 
     const event = {
       event: "payment.captured",
-      payload: { payment: { entity: { order_id: "ord_1", method: "card" } } },
+      payload: { payment: { entity: { id: "pay_1", order_id: "ord_1", method: "card" } } },
     };
     const result = await handleWebhook(JSON.stringify(event), "valid-sig");
 
@@ -266,21 +309,59 @@ describe("handleWebhook", () => {
     expect(result).toEqual({ status: "ok" });
   });
 
-  it("halts subscription on payment.failed", async () => {
+  it("skips activation if already ACTIVE (idempotent)", async () => {
     vi.mocked(verifyWebhookSignature).mockReturnValue(true);
     vi.mocked(prisma.razorpayWebhookLog.create).mockResolvedValue({} as never);
     vi.mocked(prisma.razorpayWebhookLog.updateMany).mockResolvedValue({} as never);
     vi.mocked(subscriptionRepository.findByRazorpayOrderId).mockResolvedValue({
       id: "sub-1",
+      status: "ACTIVE",
+    } as never);
+
+    const event = {
+      event: "payment.captured",
+      payload: { payment: { entity: { id: "pay_1", order_id: "ord_1", method: "card" } } },
+    };
+    const result = await handleWebhook(JSON.stringify(event), "valid-sig");
+
+    expect(subscriptionRepository.update).not.toHaveBeenCalled();
+    expect(result).toEqual({ status: "ok" });
+  });
+
+  it("halts subscription on payment.failed when PENDING", async () => {
+    vi.mocked(verifyWebhookSignature).mockReturnValue(true);
+    vi.mocked(prisma.razorpayWebhookLog.create).mockResolvedValue({} as never);
+    vi.mocked(prisma.razorpayWebhookLog.updateMany).mockResolvedValue({} as never);
+    vi.mocked(subscriptionRepository.findByRazorpayOrderId).mockResolvedValue({
+      id: "sub-1",
+      status: "PENDING",
     } as never);
     vi.mocked(subscriptionRepository.update).mockResolvedValue({} as never);
 
     const event = {
       event: "payment.failed",
-      payload: { payment: { entity: { order_id: "ord_1" } } },
+      payload: { payment: { entity: { id: "pay_1", order_id: "ord_1" } } },
     };
     await handleWebhook(JSON.stringify(event), "valid-sig");
 
     expect(subscriptionRepository.update).toHaveBeenCalledWith("sub-1", { status: "HALTED" });
+  });
+
+  it("does not halt ACTIVE subscription on payment.failed", async () => {
+    vi.mocked(verifyWebhookSignature).mockReturnValue(true);
+    vi.mocked(prisma.razorpayWebhookLog.create).mockResolvedValue({} as never);
+    vi.mocked(prisma.razorpayWebhookLog.updateMany).mockResolvedValue({} as never);
+    vi.mocked(subscriptionRepository.findByRazorpayOrderId).mockResolvedValue({
+      id: "sub-1",
+      status: "ACTIVE",
+    } as never);
+
+    const event = {
+      event: "payment.failed",
+      payload: { payment: { entity: { id: "pay_1", order_id: "ord_1" } } },
+    };
+    await handleWebhook(JSON.stringify(event), "valid-sig");
+
+    expect(subscriptionRepository.update).not.toHaveBeenCalled();
   });
 });

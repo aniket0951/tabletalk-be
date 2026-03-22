@@ -104,6 +104,11 @@ export async function verifyPayment(paymentDetails: {
     throw new BillingError("Subscription not found", 404);
   }
 
+  // Idempotency: if already activated, return existing subscription
+  if (subscription.status === SUBSCRIPTION_STATUS.ACTIVE) {
+    return subscription;
+  }
+
   const rzpPayment = await getRazorpay().payments.fetch(razorpay_payment_id);
 
   const now = new Date();
@@ -118,16 +123,21 @@ export async function verifyPayment(paymentDetails: {
     endDate,
   });
 
-  await invoiceRepository.create({
-    invoiceNumber: `INV-${Date.now()}`,
-    subscriptionId: subscription.id,
-    amount: PLAN_PRICES[subscription.plan as keyof typeof PLAN_PRICES] / 100,
-    status: INVOICE_STATUS.PAID,
-    razorpayPaymentId: razorpay_payment_id,
-    razorpayOrderId: razorpay_order_id,
-    paidAt: new Date(),
-    paymentMethod: rzpPayment.method || null,
-  });
+  // Idempotency: use try-catch for unique constraint on razorpayPaymentId
+  try {
+    await invoiceRepository.create({
+      invoiceNumber: `INV-${Date.now()}`,
+      subscriptionId: subscription.id,
+      amount: PLAN_PRICES[subscription.plan as keyof typeof PLAN_PRICES] / 100,
+      status: INVOICE_STATUS.PAID,
+      razorpayPaymentId: razorpay_payment_id,
+      razorpayOrderId: razorpay_order_id,
+      paidAt: new Date(),
+      paymentMethod: rzpPayment.method || null,
+    });
+  } catch {
+    // Invoice already exists for this payment (duplicate verify call) — safe to ignore
+  }
 
   return updated;
 }
@@ -155,6 +165,10 @@ export async function handleWebhook(rawBody: string, signature: string | undefin
 
   const event = JSON.parse(rawBody);
 
+  // Log webhook with payment_id for deduplication
+  const rzpPayment = event.payload?.payment?.entity;
+  const paymentId = rzpPayment?.id || null;
+
   await prisma.razorpayWebhookLog.create({
     data: {
       eventType: event.event,
@@ -164,7 +178,6 @@ export async function handleWebhook(rawBody: string, signature: string | undefin
   });
 
   const eventType: string = event.event;
-  const rzpPayment = event.payload?.payment?.entity;
 
   if (!rzpPayment?.order_id) {
     return { status: "ignored" };
@@ -177,6 +190,11 @@ export async function handleWebhook(rawBody: string, signature: string | undefin
 
   switch (eventType) {
     case "payment.captured": {
+      // Idempotency: skip if already activated by verify endpoint
+      if (subscription.status === SUBSCRIPTION_STATUS.ACTIVE) {
+        break;
+      }
+
       const endDate = new Date();
       endDate.setDate(endDate.getDate() + 30);
       await subscriptionRepository.update(subscription.id, {
@@ -189,17 +207,27 @@ export async function handleWebhook(rawBody: string, signature: string | undefin
       break;
     }
     case "payment.failed": {
-      await subscriptionRepository.update(subscription.id, {
-        status: SUBSCRIPTION_STATUS.HALTED,
-      });
+      // Only halt if still PENDING — don't overwrite ACTIVE
+      if (subscription.status === SUBSCRIPTION_STATUS.PENDING) {
+        await subscriptionRepository.update(subscription.id, {
+          status: SUBSCRIPTION_STATUS.HALTED,
+        });
+      }
       break;
     }
   }
 
-  await prisma.razorpayWebhookLog.updateMany({
-    where: { eventType, processed: false },
-    data: { processed: true },
-  });
+  // Mark only THIS webhook as processed (by matching payload content)
+  if (paymentId) {
+    await prisma.razorpayWebhookLog.updateMany({
+      where: {
+        eventType,
+        processed: false,
+        payload: { contains: paymentId },
+      },
+      data: { processed: true },
+    });
+  }
 
   return { status: "ok" };
 }

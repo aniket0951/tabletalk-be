@@ -14,7 +14,11 @@ export function findCategories(restaurantId: string) {
   });
 }
 
-export function findItemsByCategory(categoryId: string, page: number, limit: number) {
+export function findItemsByCategory(
+  categoryId: string,
+  page: number,
+  limit: number,
+) {
   return prisma.menuItem.findMany({
     where: { categoryId, isDeleted: false },
     select: {
@@ -42,13 +46,18 @@ export function findAllWithItems(restaurantId: string) {
   });
 }
 
-export function findCategoryByIdAndRestaurant(categoryId: string, restaurantId: string) {
+export function findCategoryByIdAndRestaurant(
+  categoryId: string,
+  restaurantId: string,
+) {
   return prisma.menuCategory.findFirst({
     where: { id: categoryId, restaurantId },
   });
 }
 
-export function createItem(data: Parameters<typeof prisma.menuItem.create>[0]["data"]) {
+export function createItem(
+  data: Parameters<typeof prisma.menuItem.create>[0]["data"],
+) {
   return prisma.menuItem.create({ data });
 }
 
@@ -67,7 +76,9 @@ export function deleteItem(id: string) {
   return prisma.menuItem.delete({ where: { id } });
 }
 
-export function createCategory(data: Parameters<typeof prisma.menuCategory.create>[0]["data"]) {
+export function createCategory(
+  data: Parameters<typeof prisma.menuCategory.create>[0]["data"],
+) {
   return prisma.menuCategory.create({ data });
 }
 
@@ -101,13 +112,19 @@ export function findPublicCategories(restaurantId: string) {
       name: true,
       emoji: true,
       sortOrder: true,
-      _count: { select: { items: { where: { available: true, isDeleted: false } } } },
+      _count: {
+        select: { items: { where: { available: true, isDeleted: false } } },
+      },
     },
     orderBy: { sortOrder: "asc" as const },
   });
 }
 
-export function findAvailableItems(categoryId: string, page: number, limit: number) {
+export function findAvailableItems(
+  categoryId: string,
+  page: number,
+  limit: number,
+) {
   return prisma.menuItem.findMany({
     where: { categoryId, available: true, isDeleted: false },
     select: {
