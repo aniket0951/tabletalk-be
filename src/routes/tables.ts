@@ -7,6 +7,7 @@ import { CTX, TABLE_STATUS, SOCKET_EVENT } from "../lib/constants";
 import { tableRepository } from "../repositories/table.repository";
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
+import { success, validationError, serverError } from "../lib/response";
 
 export const tablesRoutes = new Hono<Env>();
 
@@ -17,10 +18,10 @@ tablesRoutes.get("/", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const tables = await tableRepository.findMany(restaurantId);
-    return c.json(tables);
+    return success(c, tables, "Tables fetched");
   } catch (err) {
     logger.error("GET /tables", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -30,7 +31,7 @@ tablesRoutes.post("/", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
 
     const { label, capacity } = await c.req.json();
-    if (!label) return c.json({ error: "Missing label" }, 400);
+    if (!label) return validationError(c, "Missing label");
 
     const maxTable = await tableRepository.findMaxTableNumber(restaurantId);
 
@@ -41,10 +42,10 @@ tablesRoutes.post("/", async (c) => {
       restaurantId,
     });
 
-    return c.json(table);
+    return success(c, table, "Table created");
   } catch (err) {
     logger.error("POST /tables", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -56,7 +57,7 @@ tablesRoutes.patch("/:id", async (c) => {
 
     const existing = await tableRepository.findById(id);
     if (!existing || existing.restaurantId !== restaurantId) {
-      return c.json({ error: "Not found" }, 404);
+      return validationError(c, "Not found");
     }
 
     const body = await c.req.json();
@@ -67,14 +68,14 @@ tablesRoutes.patch("/:id", async (c) => {
     if (body.capacity !== undefined) {
       const cap = Number(body.capacity);
       if (!Number.isInteger(cap) || cap < 1 || cap > 100) {
-        return c.json({ error: "Invalid capacity (1-100)" }, 400);
+        return validationError(c, "Invalid capacity (1-100)");
       }
       data.capacity = cap;
     }
     if (body.active !== undefined) data.active = Boolean(body.active);
     if (body.status !== undefined) {
       if (![TABLE_STATUS.FREE, TABLE_STATUS.OCCUPIED].includes(body.status)) {
-        return c.json({ error: "Invalid status" }, 400);
+        return validationError(c, "Invalid status");
       }
       data.status = body.status;
     }
@@ -82,10 +83,10 @@ tablesRoutes.patch("/:id", async (c) => {
     const table = await tableRepository.update(id, data);
 
     emitSocketEvent(SOCKET_EVENT.TABLE_UPDATED, table);
-    return c.json(table);
+    return success(c, table, "Table updated");
   } catch (err) {
     logger.error("PATCH /tables/:id", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -96,16 +97,16 @@ tablesRoutes.delete("/:id", async (c) => {
 
     const table = await tableRepository.findById(id);
     if (!table) {
-      return c.json({ error: "Not found" }, 404);
+      return validationError(c, "Not found");
     }
     if (table.status === TABLE_STATUS.OCCUPIED) {
-      return c.json({ error: "Cannot delete occupied table" }, 400);
+      return validationError(c, "Cannot delete occupied table");
     }
 
     await tableRepository.softDelete(id);
-    return c.json({ success: true });
+    return success(c, null, "Table deleted");
   } catch (err) {
     logger.error("DELETE /tables/:id", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });

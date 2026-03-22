@@ -8,6 +8,7 @@ import { staffRepository } from "../repositories/staff.repository";
 import { staffService } from "../services/staff.service";
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
+import { success, validationError, serverError } from "../lib/response";
 
 export const staffRoutes = new Hono<Env>();
 
@@ -18,10 +19,10 @@ staffRoutes.get("/", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const staff = await staffRepository.findMany(restaurantId);
-    return c.json(staff);
+    return success(c, staff, "Staff fetched");
   } catch (err) {
     logger.error("GET /staff", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -32,18 +33,15 @@ staffRoutes.post("/", async (c) => {
 
     const { name, phone, pin, role } = await c.req.json();
     if (!name || !pin) {
-      return c.json({ error: "Name and PIN are required" }, 400);
+      return validationError(c, "Name and PIN are required");
     }
 
     const pinError = staffService.validatePin(pin);
-    if (pinError) return c.json({ error: pinError }, 400);
+    if (pinError) return validationError(c, pinError);
 
     const isUnique = await staffService.checkPinUniqueness(restaurantId, pin);
     if (!isUnique) {
-      return c.json(
-        { error: "PIN already in use by another staff member" },
-        400,
-      );
+      return validationError(c, "PIN already in use by another staff member");
     }
 
     const pinHash = await staffService.hashPin(pin);
@@ -58,10 +56,10 @@ staffRoutes.post("/", async (c) => {
       restaurantId,
     });
 
-    return c.json(staff);
+    return success(c, staff, "Staff created");
   } catch (err) {
     logger.error("POST /staff", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -73,14 +71,14 @@ staffRoutes.patch("/:id", async (c) => {
 
     const existing = await staffRepository.findById(id);
     if (!existing || existing.restaurantId !== restaurantId) {
-      return c.json({ error: "Not found" }, 404);
+      return validationError(c, "Not found");
     }
 
     const { name, phone, pin, role } = await c.req.json();
 
     if (pin !== undefined) {
       const pinError = staffService.validatePin(pin);
-      if (pinError) return c.json({ error: pinError }, 400);
+      if (pinError) return validationError(c, pinError);
 
       const isUnique = await staffService.checkPinUniqueness(
         restaurantId,
@@ -88,10 +86,7 @@ staffRoutes.patch("/:id", async (c) => {
         id,
       );
       if (!isUnique) {
-        return c.json(
-          { error: "PIN already in use by another staff member" },
-          400,
-        );
+        return validationError(c, "PIN already in use by another staff member");
       }
     }
 
@@ -101,17 +96,17 @@ staffRoutes.patch("/:id", async (c) => {
     if (pin !== undefined) data.pin = await staffService.hashPin(pin);
     if (role !== undefined) {
       if (![STAFF_ROLE.WAITER, STAFF_ROLE.CAPTAIN].includes(role)) {
-        return c.json({ error: "Invalid role" }, 400);
+        return validationError(c, "Invalid role");
       }
       data.role = role;
     }
 
     const staff = await staffRepository.update(id, data);
 
-    return c.json(staff);
+    return success(c, staff, "Staff updated");
   } catch (err) {
     logger.error("PATCH /staff/:id", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -122,14 +117,14 @@ staffRoutes.delete("/:id", async (c) => {
 
     const existing = await staffRepository.findById(id);
     if (!existing) {
-      return c.json({ error: "Not found" }, 404);
+      return validationError(c, "Not found");
     }
 
     await staffRepository.softDelete(id);
 
-    return c.json({ success: true });
+    return success(c, null, "Staff deleted");
   } catch (err) {
     logger.error("DELETE /staff/:id", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });

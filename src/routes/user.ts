@@ -4,6 +4,7 @@ import { CTX } from "../lib/constants";
 import { userService } from "../services/user.service";
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
+import { success, serverError } from "../lib/response";
 
 export const userRoutes = new Hono<Env>();
 
@@ -14,9 +15,9 @@ userRoutes.delete("/delete", async (c) => {
   try {
     const userId = c.get(CTX.USER_ID);
     await userService.cascadeDelete(userId);
-    return c.json({ success: true });
+    return success(c, null, "Account deleted");
   } catch (err) {
     logger.error("DELETE /user/delete", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });

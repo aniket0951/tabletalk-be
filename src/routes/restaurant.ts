@@ -6,6 +6,7 @@ import { CTX, SERVICE_MODE } from "../lib/constants";
 import { restaurantRepository } from "../repositories/restaurant.repository";
 import { restaurantService } from "../services/restaurant.service";
 import type { Env } from "../types";
+import { success, validationError, serverError } from "../lib/response";
 
 export const restaurantRoutes = new Hono<Env>();
 
@@ -17,9 +18,9 @@ restaurantRoutes.get("/", requireRestaurant, async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
 
     const restaurant = await restaurantRepository.findById(restaurantId);
-    if (!restaurant) return c.json({ error: "No restaurant" }, 404);
+    if (!restaurant) return validationError(c, "No restaurant");
 
-    return c.json({
+    return success(c, {
       id: restaurantId,
       name: restaurant.name,
       phone: restaurant.phone,
@@ -28,10 +29,10 @@ restaurantRoutes.get("/", requireRestaurant, async (c) => {
       serviceMode: restaurant.serviceMode,
       restaurantCode: restaurant.restaurantCode,
       tableCount: restaurant._count.tables,
-    });
+    }, "Restaurant fetched");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return c.json({ error: "Server error", detail: message }, 500);
+    return serverError(c, message);
   }
 });
 
@@ -50,24 +51,24 @@ restaurantRoutes.patch("/", requireRestaurant, async (c) => {
       if (
         ![SERVICE_MODE.DINE_IN, SERVICE_MODE.WALK_IN].includes(body.serviceMode)
       ) {
-        return c.json({ error: "Invalid serviceMode" }, 400);
+        return validationError(c, "Invalid serviceMode");
       }
       data.serviceMode = body.serviceMode;
     }
 
     const updated = await restaurantRepository.update(restaurantId, data);
 
-    return c.json({
+    return success(c, {
       id: updated.id,
       name: updated.name,
       phone: updated.phone,
       city: updated.city,
       upiId: updated.upiId,
       serviceMode: updated.serviceMode,
-    });
+    }, "Restaurant updated");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return c.json({ error: "Server error", detail: message }, 500);
+    return serverError(c, message);
   }
 });
 
@@ -78,7 +79,7 @@ restaurantRoutes.post("/", async (c) => {
     const body = await c.req.json();
 
     if (!body.name || !body.phone) {
-      return c.json({ error: "Name and phone are required" }, 400);
+      return validationError(c, "Name and phone are required");
     }
 
     const restaurant = await restaurantRepository.create({
@@ -96,14 +97,14 @@ restaurantRoutes.post("/", async (c) => {
       restaurantId: restaurant.id,
     });
 
-    return c.json({
+    return success(c, {
       id: restaurant.id,
       name: restaurant.name,
       token: newToken,
-    });
+    }, "Restaurant created");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return c.json({ error: "Server error", detail: message }, 500);
+    return serverError(c, message);
   }
 });
 
@@ -118,9 +119,9 @@ restaurantRoutes.post("/code", requireRestaurant, async (c) => {
       restaurantCode: code,
     });
 
-    return c.json({ restaurantCode: updated.restaurantCode });
+    return success(c, { restaurantCode: updated.restaurantCode }, "Restaurant code generated");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return c.json({ error: "Server error", detail: message }, 500);
+    return serverError(c, message);
   }
 });

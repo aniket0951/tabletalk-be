@@ -8,6 +8,7 @@ import { orderService, validateStatusTransition } from "../services/order.servic
 
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
+import { success, validationError, serverError } from "../lib/response";
 
 export const staffOrdersRoutes = new Hono<Env>();
 
@@ -28,10 +29,10 @@ staffOrdersRoutes.get("/", async (c) => {
       payload.staffId,
       dateFilter
     );
-    return c.json(orders);
+    return success(c, orders, "Staff orders fetched");
   } catch (err) {
     logger.error("GET /staff/orders", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -44,12 +45,12 @@ staffOrdersRoutes.patch("/:id", async (c) => {
 
     const existing = await orderRepository.findById(id);
     if (!existing || existing.restaurantId !== payload.restaurantId) {
-      return c.json({ error: "Not found" }, 404);
+      return validationError(c, "Not found");
     }
 
     const transitionError = validateStatusTransition(existing.status, status);
     if (transitionError) {
-      return c.json({ error: transitionError }, 400);
+      return validationError(c, transitionError);
     }
 
     const updateData = orderService.buildStatusUpdateData(status, existing);
@@ -69,9 +70,9 @@ staffOrdersRoutes.patch("/:id", async (c) => {
 
     // Lean response for staff UI
     const leanOrder = await orderRepository.findByIdWithStaffSelect(id);
-    return c.json(leanOrder);
+    return success(c, leanOrder, "Order updated");
   } catch (err) {
     logger.error("PATCH /staff/orders/:id", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });

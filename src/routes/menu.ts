@@ -7,6 +7,7 @@ import { menuRepository } from "../repositories/menu.repository";
 import { menuService, MenuError } from "../services/menu.service";
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
+import { success, validationError, serverError } from "../lib/response";
 
 export const menuRoutes = new Hono<Env>();
 
@@ -17,10 +18,10 @@ menuRoutes.get("/categories", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const categories = await menuRepository.findCategories(restaurantId);
-    return c.json(categories);
+    return success(c, categories, "Categories fetched");
   } catch (err) {
     logger.error("GET /menu/categories", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -36,10 +37,10 @@ menuRoutes.get("/categories/:categoryId/items", async (c) => {
     const hasMore = items.length > limit;
     if (hasMore) items.pop();
 
-    return c.json({ items, pagination: { page, limit, hasMore } });
+    return success(c, { items, pagination: { page, limit, hasMore } }, "Items fetched");
   } catch (err) {
     logger.error("GET /menu/categories/:categoryId/items", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -48,10 +49,10 @@ menuRoutes.get("/items", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const categories = await menuRepository.findAllWithItems(restaurantId);
-    return c.json(categories);
+    return success(c, categories, "Menu items fetched");
   } catch (err) {
     logger.error("GET /menu/items", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -61,11 +62,11 @@ menuRoutes.post("/items", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const body = await c.req.json();
     const item = await menuService.createItem(restaurantId, body);
-    return c.json(item);
+    return success(c, item, "Menu item created");
   } catch (err) {
-    if (err instanceof MenuError) return c.json({ error: err.message }, err.statusCode as 400);
+    if (err instanceof MenuError) return validationError(c, err.message);
     logger.error("POST /menu/items", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -77,20 +78,20 @@ menuRoutes.patch("/items/:id", async (c) => {
 
     const existing = await menuRepository.findItemById(id);
     if (!existing || existing.category.restaurantId !== restaurantId) {
-      return c.json({ error: "Not found" }, 404);
+      return validationError(c, "Not found");
     }
 
     const body = await c.req.json();
     const result = menuService.validateItemUpdate(body);
     if (result instanceof MenuError) {
-      return c.json({ error: result.message }, result.statusCode as 400);
+      return validationError(c, result.message);
     }
 
     const item = await menuRepository.updateItem(id, result);
-    return c.json(item);
+    return success(c, item, "Menu item updated");
   } catch (err) {
     logger.error("PATCH /menu/items/:id", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -102,14 +103,14 @@ menuRoutes.delete("/items/:id", async (c) => {
 
     const existing = await menuRepository.findItemById(id);
     if (!existing || existing.category.restaurantId !== restaurantId) {
-      return c.json({ error: "Not found" }, 404);
+      return validationError(c, "Not found");
     }
 
     await menuRepository.deleteItem(id);
-    return c.json({ success: true });
+    return success(c, null, "Menu item deleted");
   } catch (err) {
     logger.error("DELETE /menu/items/:id", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -119,11 +120,11 @@ menuRoutes.post("/categories", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const { name, emoji } = await c.req.json();
     const category = await menuService.createCategory(restaurantId, name, emoji);
-    return c.json(category);
+    return success(c, category, "Category created");
   } catch (err) {
-    if (err instanceof MenuError) return c.json({ error: err.message }, err.statusCode as 400);
+    if (err instanceof MenuError) return validationError(c, err.message);
     logger.error("POST /menu/categories", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -134,13 +135,13 @@ menuRoutes.post("/categories/defaults", async (c) => {
 
     const existing = await menuRepository.countCategories(restaurantId);
     if (existing > 0) {
-      return c.json({ error: "Categories already exist" }, 409);
+      return validationError(c, "Categories already exist");
     }
 
     await menuRepository.seedDefaults(restaurantId);
-    return c.json({ success: true });
+    return success(c, null, "Default categories created");
   } catch (err) {
     logger.error("POST /menu/categories/defaults", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });

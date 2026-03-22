@@ -5,16 +5,11 @@ import { CTX, DELIVERY_STATUS, CHANNEL, CAMPAIGN_STATUS } from "../lib/constants
 import { campaignRepository } from "../repositories/campaign.repository";
 import { campaignService, CampaignError } from "../services/campaign.service";
 import type { Env } from "../types";
+import { success, validationError, serverError } from "../lib/response";
 
 export const campaignRoutes = new Hono<Env>();
 
 campaignRoutes.use("*", ownerAuth, requireRestaurant);
-
-function debugMsg(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error !== null) return JSON.stringify(error);
-  return String(error);
-}
 
 // GET /campaigns — list campaigns
 campaignRoutes.get("/", async (c) => {
@@ -51,13 +46,13 @@ campaignRoutes.get("/", async (c) => {
       totalSpent: aggStats._sum.totalCost || 0,
     };
 
-    return c.json({
+    return success(c, {
       campaigns: result,
       stats,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    });
+    }, "Campaigns fetched");
   } catch (error) {
-    return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
+    return serverError(c, error instanceof Error ? error.message : String(error));
   }
 });
 
@@ -72,7 +67,7 @@ campaignRoutes.get("/:id", async (c) => {
       campaignRepository.getDeliveryStatusCounts(id),
     ]);
 
-    if (!campaign) return c.json({ error: "Campaign not found" }, 404);
+    if (!campaign) return validationError(c, "Campaign not found");
 
     const stats = { sent: 0, delivered: 0, failed: 0, pending: 0, whatsapp: 0, sms: 0, total: 0 };
     for (const row of statusCounts) {
@@ -87,9 +82,9 @@ campaignRoutes.get("/:id", async (c) => {
       else if (row.channel === CHANNEL.SMS) stats.sms = row._count;
     }
 
-    return c.json({ ...campaign, stats });
+    return success(c, { ...campaign, stats }, "Campaign fetched");
   } catch (error) {
-    return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
+    return serverError(c, error instanceof Error ? error.message : String(error));
   }
 });
 
@@ -99,10 +94,10 @@ campaignRoutes.post("/", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const body = await c.req.json();
     const campaign = await campaignService.createDraft(restaurantId, body);
-    return c.json(campaign, 201);
+    return success(c, campaign, "Campaign created");
   } catch (error) {
-    if (error instanceof CampaignError) return c.json({ error: error.message }, error.statusCode as 400);
-    return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
+    if (error instanceof CampaignError) return validationError(c, error.message);
+    return serverError(c, error instanceof Error ? error.message : String(error));
   }
 });
 
@@ -113,12 +108,12 @@ campaignRoutes.delete("/:id", async (c) => {
     const id = c.req.param("id");
 
     const campaign = await campaignRepository.findDeletable(id, restaurantId, [CAMPAIGN_STATUS.DRAFT, CAMPAIGN_STATUS.PAYING]);
-    if (!campaign) return c.json({ error: "Campaign not found or cannot be deleted" }, 404);
+    if (!campaign) return validationError(c, "Campaign not found or cannot be deleted");
 
     await campaignRepository.remove(campaign.id);
-    return c.json({ success: true });
+    return success(c, null, "Campaign deleted");
   } catch (error) {
-    return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
+    return serverError(c, error instanceof Error ? error.message : String(error));
   }
 });
 
@@ -128,10 +123,10 @@ campaignRoutes.post("/:id/checkout", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const id = c.req.param("id");
     const result = await campaignService.checkout(id, restaurantId, c.get(CTX.EMAIL));
-    return c.json(result);
+    return success(c, result, "Campaign checkout created");
   } catch (error) {
-    if (error instanceof CampaignError) return c.json({ error: error.message }, error.statusCode as 400);
-    return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
+    if (error instanceof CampaignError) return validationError(c, error.message);
+    return serverError(c, error instanceof Error ? error.message : String(error));
   }
 });
 
@@ -142,9 +137,9 @@ campaignRoutes.post("/:id/verify", async (c) => {
     const id = c.req.param("id");
     const body = await c.req.json();
     const result = await campaignService.verifyAndSend(id, restaurantId, body);
-    return c.json(result);
+    return success(c, result, "Campaign payment verified");
   } catch (error) {
-    if (error instanceof CampaignError) return c.json({ error: error.message }, error.statusCode as 400);
-    return c.json({ error: "Server error", debug: debugMsg(error) }, 500);
+    if (error instanceof CampaignError) return validationError(c, error.message);
+    return serverError(c, error instanceof Error ? error.message : String(error));
   }
 });

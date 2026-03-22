@@ -8,6 +8,7 @@ import { billingService, BillingError } from "../services/billing.service";
 
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
+import { success, validationError, serverError } from "../lib/response";
 
 export const billingRoutes = new Hono<Env>();
 
@@ -22,7 +23,7 @@ protectedRoutes.get("/subscription", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
 
     const subscription = await subscriptionRepository.findLatest(restaurantId);
-    if (!subscription) return c.json({ error: "No subscription" }, 404);
+    if (!subscription) return validationError(c, "No subscription");
 
     const daysRemaining = subscription.endDate
       ? Math.max(
@@ -34,10 +35,10 @@ protectedRoutes.get("/subscription", async (c) => {
         )
       : null;
 
-    return c.json({ ...subscription, daysRemaining });
+    return success(c, { ...subscription, daysRemaining }, "Subscription fetched");
   } catch (err) {
     logger.error("GET /billing/subscription", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -47,11 +48,11 @@ protectedRoutes.post("/subscription", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const { plan } = await c.req.json();
     const subscription = await billingService.createTrialSubscription(restaurantId, plan);
-    return c.json(subscription);
+    return success(c, subscription, "Trial started");
   } catch (err) {
-    if (err instanceof BillingError) return c.json({ error: err.message }, err.statusCode as 400);
+    if (err instanceof BillingError) return validationError(c, err.message);
     logger.error("POST /billing/subscription", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -61,12 +62,12 @@ protectedRoutes.post("/checkout", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const { plan } = await c.req.json();
     const result = await billingService.createCheckout(restaurantId, c.get(CTX.USER_ID), plan);
-    return c.json(result);
+    return success(c, result, "Checkout created");
   } catch (err: any) {
-    if (err instanceof BillingError) return c.json({ error: err.message }, err.statusCode as 400);
+    if (err instanceof BillingError) return validationError(c, err.message);
     logger.error("POST /billing/checkout", err);
     const detail = err?.error?.description || err?.message || String(err);
-    return c.json({ error: "Server error", detail }, 500);
+    return serverError(c, detail);
   }
 });
 
@@ -75,11 +76,11 @@ protectedRoutes.post("/verify", async (c) => {
   try {
     const body = await c.req.json();
     const subscription = await billingService.verifyPayment(body);
-    return c.json({ success: true, subscription });
+    return success(c, { subscription }, "Payment verified");
   } catch (err) {
-    if (err instanceof BillingError) return c.json({ error: err.message }, err.statusCode as 400);
+    if (err instanceof BillingError) return validationError(c, err.message);
     logger.error("POST /billing/verify", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -88,11 +89,11 @@ protectedRoutes.post("/cancel", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const subscription = await billingService.cancelSubscription(restaurantId);
-    return c.json({ success: true, subscription });
+    return success(c, { subscription }, "Subscription cancelled");
   } catch (err) {
-    if (err instanceof BillingError) return c.json({ error: err.message }, err.statusCode as 400);
+    if (err instanceof BillingError) return validationError(c, err.message);
     logger.error("POST /billing/cancel", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -101,10 +102,10 @@ protectedRoutes.get("/invoices", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const invoices = await invoiceRepository.findByRestaurant(restaurantId);
-    return c.json(invoices);
+    return success(c, invoices, "Invoices fetched");
   } catch (err) {
     logger.error("GET /billing/invoices", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -117,11 +118,11 @@ webhookRoutes.post("/webhook", async (c) => {
     const rawBody = await c.req.text();
     const signature = c.req.header("x-razorpay-signature");
     const result = await billingService.handleWebhook(rawBody, signature);
-    return c.json(result);
+    return success(c, result, "Webhook processed");
   } catch (err) {
-    if (err instanceof BillingError) return c.json({ error: err.message }, err.statusCode as 400);
+    if (err instanceof BillingError) return validationError(c, err.message);
     logger.error("POST /billing/webhook", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 

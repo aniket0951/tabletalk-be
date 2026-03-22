@@ -5,6 +5,7 @@ import { CTX } from "../lib/constants";
 import { dashboardService } from "../services/dashboard.service";
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
+import { success, serverError } from "../lib/response";
 
 export const dashboardRoutes = new Hono<Env>();
 
@@ -15,9 +16,9 @@ dashboardRoutes.get("/stats", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const stats = await dashboardService.getStats(restaurantId);
-    return c.json(stats);
+    return success(c, stats, "Dashboard stats fetched");
   } catch (err) {
     logger.error("GET /dashboard/stats", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });

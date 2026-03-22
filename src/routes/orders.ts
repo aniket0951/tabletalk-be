@@ -9,6 +9,7 @@ import { orderService, OrderError, validateStatusTransition } from "../services/
 
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
+import { success, validationError, serverError } from "../lib/response";
 
 export const ordersRoutes = new Hono<Env>();
 
@@ -58,15 +59,15 @@ ordersRoutes.get("/", async (c) => {
 
     const totalAll = Object.values(statusCounts).reduce((a, b) => a + b, 0);
 
-    return c.json({
+    return success(c, {
       orders,
       statusCounts,
       totalAll,
       pagination: { page, limit, totalFiltered, totalPages: Math.ceil(totalFiltered / limit) },
-    });
+    }, "Orders fetched");
   } catch (err) {
     logger.error("GET /orders", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -78,13 +79,13 @@ ordersRoutes.get("/:id", async (c) => {
 
     const order = await orderRepository.findByIdWithDetail(id);
     if (!order || order.restaurantId !== restaurantId) {
-      return c.json({ error: "Not found" }, 404);
+      return validationError(c, "Not found");
     }
 
-    return c.json(order);
+    return success(c, order, "Order fetched");
   } catch (err) {
     logger.error("GET /orders/:id", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
 
@@ -96,7 +97,7 @@ ordersRoutes.patch("/:id", async (c) => {
 
     const existing = await orderRepository.findById(id);
     if (!existing || existing.restaurantId !== restaurantId) {
-      return c.json({ error: "Not found" }, 404);
+      return validationError(c, "Not found");
     }
 
     const body = await c.req.json();
@@ -106,7 +107,7 @@ ordersRoutes.patch("/:id", async (c) => {
     if (body.status) {
       const transitionError = validateStatusTransition(existing.status, body.status);
       if (transitionError) {
-        return c.json({ error: transitionError }, 400);
+        return validationError(c, transitionError);
       }
       Object.assign(updateData, orderService.buildStatusUpdateData(body.status, existing));
     }
@@ -123,9 +124,9 @@ ordersRoutes.patch("/:id", async (c) => {
     }
 
     emitSocketEvent(SOCKET_EVENT.ORDER_UPDATED, order);
-    return c.json(order);
+    return success(c, order, "Order updated");
   } catch (err) {
     logger.error("PATCH /orders/:id", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });

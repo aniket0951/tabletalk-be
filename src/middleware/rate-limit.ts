@@ -1,4 +1,5 @@
 import type { Context, Next } from "hono";
+import { validationError } from "../lib/response";
 
 interface RateLimitEntry {
   count: number;
@@ -40,7 +41,7 @@ export function rateLimit(maxRequests: number, windowMs: number) {
     if (entry.count >= maxRequests) {
       const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
       c.header("Retry-After", String(retryAfter));
-      return c.json({ error: "Too many requests. Try again later." }, 429);
+      return validationError(c, "Too many requests. Try again later.");
     }
 
     entry.count++;

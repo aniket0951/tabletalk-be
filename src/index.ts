@@ -24,6 +24,7 @@ import { userRoutes } from "./routes/user";
 import { publicRoutes } from "./routes/public";
 import { campaignRoutes } from "./routes/campaigns";
 import { rateLimit } from "./middleware/rate-limit";
+import { success, serverError } from "./lib/response";
 
 const app = new Hono<Env>();
 
@@ -40,7 +41,7 @@ app.use("*", logger());
 // Global error handler
 app.onError((err, c) => {
   console.error(`[${c.req.method} ${c.req.path}] error:`, err);
-  return c.json({ error: "Server error" }, 500);
+  return serverError(c, err instanceof Error ? err.message : undefined);
 });
 
 app.use(
@@ -58,7 +59,7 @@ app.get("/health", async (c) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
   } catch {}
-  return c.json({ status: "ok" });
+  return success(c, { status: "ok" }, "Health check passed");
 });
 
 // Global rate limit: 100 requests per minute per IP (owner/staff routes)

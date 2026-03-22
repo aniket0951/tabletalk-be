@@ -5,6 +5,7 @@ import { CTX } from "../lib/constants";
 import { customerRepository } from "../repositories/customer.repository";
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
+import { success, serverError } from "../lib/response";
 
 export const customersRoutes = new Hono<Env>();
 
@@ -28,13 +29,13 @@ customersRoutes.get("/", async (c) => {
     const totalRevenue = statsAgg._sum.totalSpent || 0;
     const avgSpendPerCustomer = totalCustomers ? Math.round(totalRevenue / totalCustomers) : 0;
 
-    return c.json({
+    return success(c, {
       customers,
       stats: { totalCustomers, totalRevenue, avgSpendPerCustomer, repeatCustomers },
       pagination: { page, limit, totalFiltered, totalPages: Math.ceil(totalFiltered / limit) },
-    });
+    }, "Customers fetched");
   } catch (err) {
     logger.error("GET /customers", err);
-    return c.json({ error: "Server error" }, 500);
+    return serverError(c, err instanceof Error ? err.message : undefined);
   }
 });
