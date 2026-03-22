@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../lib/prisma", () => ({
   prisma: {
     order: { aggregate: vi.fn(), findMany: vi.fn() },
-    orderItem: { findMany: vi.fn() },
+    orderItem: { groupBy: vi.fn() },
+    menuItem: { findMany: vi.fn() },
   },
 }));
 
@@ -28,10 +29,10 @@ describe("getStats", () => {
       _sum: { total: null },
       _count: 0,
     } as never);
-    vi.mocked(prisma.order.findMany).mockResolvedValue([]); // weekOrders
+    vi.mocked(prisma.order.findMany).mockResolvedValue([]);
     vi.mocked(tableRepository.countByStatus).mockResolvedValue(0);
     vi.mocked(tableRepository.countActive).mockResolvedValue(0);
-    vi.mocked(prisma.orderItem.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.orderItem.groupBy).mockResolvedValue([]);
 
     const stats = await getStats("rest-1");
 
@@ -59,10 +60,13 @@ describe("getStats", () => {
     vi.mocked(prisma.order.findMany).mockResolvedValue(weekOrders as never);
     vi.mocked(tableRepository.countByStatus).mockResolvedValue(2);
     vi.mocked(tableRepository.countActive).mockResolvedValue(5);
-    vi.mocked(prisma.orderItem.findMany).mockResolvedValue([
-      { menuItem: { name: "Pasta" }, quantity: 3 },
-      { menuItem: { name: "Pizza" }, quantity: 5 },
-      { menuItem: { name: "Pasta" }, quantity: 2 },
+    vi.mocked(prisma.orderItem.groupBy).mockResolvedValue([
+      { menuItemId: "m-1", _sum: { quantity: 5 } },
+      { menuItemId: "m-2", _sum: { quantity: 5 } },
+    ] as never);
+    vi.mocked(prisma.menuItem.findMany).mockResolvedValue([
+      { id: "m-1", name: "Pasta" },
+      { id: "m-2", name: "Pizza" },
     ] as never);
 
     const stats = await getStats("rest-1");
@@ -78,7 +82,7 @@ describe("getStats", () => {
     ]);
   });
 
-  it("limits top items to 5", async () => {
+  it("limits top items to 5 via database take", async () => {
     vi.mocked(prisma.order.aggregate).mockResolvedValue({
       _sum: { total: 0 },
       _count: 0,
@@ -87,14 +91,19 @@ describe("getStats", () => {
     vi.mocked(tableRepository.countByStatus).mockResolvedValue(0);
     vi.mocked(tableRepository.countActive).mockResolvedValue(0);
 
-    const items = Array.from({ length: 10 }, (_, i) => ({
-      menuItem: { name: `Item${i}` },
-      quantity: 10 - i,
+    // groupBy already returns only 5 (take: 5 in query)
+    const grouped = Array.from({ length: 5 }, (_, i) => ({
+      menuItemId: `m-${i}`,
+      _sum: { quantity: 10 - i },
     }));
-    vi.mocked(prisma.orderItem.findMany).mockResolvedValue(items as never);
+    vi.mocked(prisma.orderItem.groupBy).mockResolvedValue(grouped as never);
+    vi.mocked(prisma.menuItem.findMany).mockResolvedValue(
+      grouped.map((g, i) => ({ id: g.menuItemId, name: `Item${i}` })) as never
+    );
 
     const stats = await getStats("rest-1");
     expect(stats.topItems).toHaveLength(5);
     expect(stats.topItems[0].name).toBe("Item0");
+    expect(stats.topItems[0].count).toBe(10);
   });
 });

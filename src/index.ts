@@ -23,6 +23,7 @@ import { billingRoutes } from "./routes/billing";
 import { userRoutes } from "./routes/user";
 import { publicRoutes } from "./routes/public";
 import { campaignRoutes } from "./routes/campaigns";
+import { rateLimit } from "./middleware/rate-limit";
 
 const app = new Hono<Env>();
 
@@ -59,6 +60,16 @@ app.get("/health", async (c) => {
   } catch {}
   return c.json({ status: "ok" });
 });
+
+// Global rate limit: 100 requests per minute per IP (owner/staff routes)
+app.use("/restaurant/*", rateLimit(100, 60 * 1000));
+app.use("/menu/*", rateLimit(100, 60 * 1000));
+app.use("/tables/*", rateLimit(100, 60 * 1000));
+app.use("/orders/*", rateLimit(100, 60 * 1000));
+app.use("/customers/*", rateLimit(100, 60 * 1000));
+app.use("/dashboard/*", rateLimit(100, 60 * 1000));
+app.use("/campaigns/*", rateLimit(100, 60 * 1000));
+app.use("/user/*", rateLimit(100, 60 * 1000));
 
 // Mount routes
 app.route("/auth", authRoutes);

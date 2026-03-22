@@ -43,19 +43,26 @@ export async function getStats(restaurantId: string) {
   }
   const weeklyRevenue = dailyRevenue.reduce((a, b) => a + b, 0);
 
-  const allOrderItems = await prisma.orderItem.findMany({
+  const topItemsRaw = await prisma.orderItem.groupBy({
+    by: ["menuItemId"],
     where: { order: { restaurantId } },
-    include: { menuItem: { select: { name: true } } },
+    _sum: { quantity: true },
+    orderBy: { _sum: { quantity: "desc" } },
+    take: 5,
   });
 
-  const itemCounts: Record<string, number> = {};
-  allOrderItems.forEach((oi: { menuItem: { name: string }; quantity: number }) => {
-    itemCounts[oi.menuItem.name] = (itemCounts[oi.menuItem.name] || 0) + oi.quantity;
-  });
-  const topItems = Object.entries(itemCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, count]) => ({ name, count }));
+  const topMenuItems = topItemsRaw.length > 0
+    ? await prisma.menuItem.findMany({
+        where: { id: { in: topItemsRaw.map((r) => r.menuItemId) } },
+        select: { id: true, name: true },
+      })
+    : [];
+
+  const nameMap = new Map(topMenuItems.map((m) => [m.id, m.name]));
+  const topItems = topItemsRaw.map((r) => ({
+    name: nameMap.get(r.menuItemId) || "Unknown",
+    count: r._sum.quantity || 0,
+  }));
 
   return {
     revenue,
