@@ -6,6 +6,7 @@ import { requireRestaurant } from "../middleware/require-restaurant";
 import { CTX, TABLE_STATUS, SOCKET_EVENT } from "../lib/constants";
 import { tableRepository } from "../repositories/table.repository";
 import type { Env } from "../types";
+import { logger } from "../lib/logger";
 
 export const tablesRoutes = new Hono<Env>();
 
@@ -17,7 +18,8 @@ tablesRoutes.get("/", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const tables = await tableRepository.findMany(restaurantId);
     return c.json(tables);
-  } catch {
+  } catch (err) {
+    logger.error("GET /tables", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -40,7 +42,8 @@ tablesRoutes.post("/", async (c) => {
     });
 
     return c.json(table);
-  } catch {
+  } catch (err) {
+    logger.error("POST /tables", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -80,7 +83,8 @@ tablesRoutes.patch("/:id", async (c) => {
 
     emitSocketEvent(SOCKET_EVENT.TABLE_UPDATED, table);
     return c.json(table);
-  } catch {
+  } catch (err) {
+    logger.error("PATCH /tables/:id", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -100,7 +104,8 @@ tablesRoutes.delete("/:id", async (c) => {
 
     await tableRepository.softDelete(id);
     return c.json({ success: true });
-  } catch {
+  } catch (err) {
+    logger.error("DELETE /tables/:id", err);
     return c.json({ error: "Server error" }, 500);
   }
 });

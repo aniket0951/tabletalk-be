@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma";
 import { getRazorpay, verifyOrderPaymentSignature } from "../lib/razorpay";
 import { campaignRepository } from "../repositories/campaign.repository";
 import { CAMPAIGN_STATUS, DELIVERY_STATUS, CHANNEL } from "../lib/constants";
+import { logger } from "../lib/logger";
 
 export class CampaignError extends Error {
   constructor(
@@ -178,7 +179,8 @@ export async function simulateDelivery(campaignId: string) {
           data: { status: CAMPAIGN_STATUS.COMPLETED, completedAt: now },
         }),
       ]);
-    } catch {
+    } catch (err) {
+      logger.error("simulateDelivery", err);
       await prisma.campaign.update({
         where: { id: campaignId },
         data: { status: CAMPAIGN_STATUS.FAILED },

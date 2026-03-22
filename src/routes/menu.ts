@@ -6,6 +6,7 @@ import { CTX } from "../lib/constants";
 import { menuRepository } from "../repositories/menu.repository";
 import { menuService, MenuError } from "../services/menu.service";
 import type { Env } from "../types";
+import { logger } from "../lib/logger";
 
 export const menuRoutes = new Hono<Env>();
 
@@ -17,7 +18,8 @@ menuRoutes.get("/categories", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const categories = await menuRepository.findCategories(restaurantId);
     return c.json(categories);
-  } catch {
+  } catch (err) {
+    logger.error("GET /menu/categories", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -35,7 +37,8 @@ menuRoutes.get("/categories/:categoryId/items", async (c) => {
     if (hasMore) items.pop();
 
     return c.json({ items, pagination: { page, limit, hasMore } });
-  } catch {
+  } catch (err) {
+    logger.error("GET /menu/categories/:categoryId/items", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -46,7 +49,8 @@ menuRoutes.get("/items", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const categories = await menuRepository.findAllWithItems(restaurantId);
     return c.json(categories);
-  } catch {
+  } catch (err) {
+    logger.error("GET /menu/items", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -60,6 +64,7 @@ menuRoutes.post("/items", async (c) => {
     return c.json(item);
   } catch (err) {
     if (err instanceof MenuError) return c.json({ error: err.message }, err.statusCode as 400);
+    logger.error("POST /menu/items", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -83,7 +88,8 @@ menuRoutes.patch("/items/:id", async (c) => {
 
     const item = await menuRepository.updateItem(id, result);
     return c.json(item);
-  } catch {
+  } catch (err) {
+    logger.error("PATCH /menu/items/:id", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -101,7 +107,8 @@ menuRoutes.delete("/items/:id", async (c) => {
 
     await menuRepository.deleteItem(id);
     return c.json({ success: true });
-  } catch {
+  } catch (err) {
+    logger.error("DELETE /menu/items/:id", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -115,6 +122,7 @@ menuRoutes.post("/categories", async (c) => {
     return c.json(category);
   } catch (err) {
     if (err instanceof MenuError) return c.json({ error: err.message }, err.statusCode as 400);
+    logger.error("POST /menu/categories", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -131,7 +139,8 @@ menuRoutes.post("/categories/defaults", async (c) => {
 
     await menuRepository.seedDefaults(restaurantId);
     return c.json({ success: true });
-  } catch {
+  } catch (err) {
+    logger.error("POST /menu/categories/defaults", err);
     return c.json({ error: "Server error" }, 500);
   }
 });

@@ -4,6 +4,7 @@ import { requireRestaurant } from "../middleware/require-restaurant";
 import { CTX } from "../lib/constants";
 import { dashboardService } from "../services/dashboard.service";
 import type { Env } from "../types";
+import { logger } from "../lib/logger";
 
 export const dashboardRoutes = new Hono<Env>();
 
@@ -15,7 +16,8 @@ dashboardRoutes.get("/stats", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const stats = await dashboardService.getStats(restaurantId);
     return c.json(stats);
-  } catch {
+  } catch (err) {
+    logger.error("GET /dashboard/stats", err);
     return c.json({ error: "Server error" }, 500);
   }
 });

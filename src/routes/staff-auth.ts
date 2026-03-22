@@ -6,6 +6,7 @@ import { staffRepository } from "../repositories/staff.repository";
 import { restaurantRepository } from "../repositories/restaurant.repository";
 import { staffService } from "../services/staff.service";
 import type { Env } from "../types";
+import { logger } from "../lib/logger";
 
 export const staffAuthRoutes = new Hono<Env>();
 
@@ -44,7 +45,8 @@ staffAuthRoutes.post("/login", rateLimit(5, 15 * 60 * 1000), async (c) => {
       role: staff.role,
       restaurantName: restaurant.name,
     });
-  } catch {
+  } catch (err) {
+    logger.error("POST /staff/auth/login", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -68,7 +70,8 @@ staffAuthRoutes.get("/me", staffAuth, async (c) => {
       restaurantId: payload.restaurantId,
       restaurantName: restaurant?.name || "",
     });
-  } catch {
+  } catch (err) {
+    logger.error("GET /staff/auth/me", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -78,7 +81,8 @@ staffAuthRoutes.post("/logout", staffAuth, async (c) => {
   try {
     clearStaffCookie(c);
     return c.json({ success: true });
-  } catch {
+  } catch (err) {
+    logger.error("POST /staff/auth/logout", err);
     return c.json({ error: "Server error" }, 500);
   }
 });

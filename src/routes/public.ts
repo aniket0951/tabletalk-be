@@ -7,6 +7,7 @@ import { tableRepository } from "../repositories/table.repository";
 import { menuRepository } from "../repositories/menu.repository";
 import { ratingRepository } from "../repositories/rating.repository";
 import { orderService, OrderError } from "../services/order.service";
+import { logger } from "../lib/logger";
 
 export const publicRoutes = new Hono();
 
@@ -28,7 +29,8 @@ publicRoutes.get("/table/:tableId", async (c) => {
       capacity: table.capacity,
       restaurant: table.restaurant,
     });
-  } catch {
+  } catch (err) {
+    logger.error("GET /public/table/:tableId", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -39,7 +41,8 @@ publicRoutes.get("/menu/:restaurantId", async (c) => {
     const restaurantId = c.req.param("restaurantId");
     const categories = await menuRepository.findPublicCategories(restaurantId);
     return c.json(categories);
-  } catch {
+  } catch (err) {
+    logger.error("GET /public/menu/:restaurantId", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -59,7 +62,8 @@ publicRoutes.get("/menu/:restaurantId/category/:categoryId", async (c) => {
     const items = await menuRepository.findAvailableItems(categoryId, page, limit);
 
     return c.json(items);
-  } catch {
+  } catch (err) {
+    logger.error("GET /public/menu/:restaurantId/category/:categoryId", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -124,6 +128,7 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
       if (err.code) body.code = err.code;
       return c.json(body, err.statusCode as 400);
     }
+    logger.error("POST /public/orders", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -138,7 +143,8 @@ publicRoutes.get("/orders/active/:tableId", async (c) => {
       return c.json({ active: false, order: null });
     }
     return c.json({ active: true, order });
-  } catch {
+  } catch (err) {
+    logger.error("GET /public/orders/active/:tableId", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -151,7 +157,8 @@ publicRoutes.get("/orders/active-by-phone/:phone", async (c) => {
 
     const orders = await orderRepository.findActiveByPhone(phone);
     return c.json({ orders });
-  } catch {
+  } catch (err) {
+    logger.error("GET /public/orders/active-by-phone/:phone", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -171,7 +178,8 @@ publicRoutes.get("/orders/history/:phone", async (c) => {
       orders,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
-  } catch {
+  } catch (err) {
+    logger.error("GET /public/orders/history/:phone", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -186,7 +194,8 @@ publicRoutes.get("/orders/:orderId", async (c) => {
       return c.json({ error: "Order not found" }, 404);
     }
     return c.json(order);
-  } catch {
+  } catch (err) {
+    logger.error("GET /public/orders/:orderId", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -248,7 +257,8 @@ publicRoutes.post("/ratings", async (c) => {
     });
 
     return c.json({ success: true, message: "Ratings submitted" });
-  } catch {
+  } catch (err) {
+    logger.error("POST /public/ratings", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -272,7 +282,8 @@ publicRoutes.get("/ratings/:menuItemId", async (c) => {
       ratings,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
-  } catch {
+  } catch (err) {
+    logger.error("GET /public/ratings/:menuItemId", err);
     return c.json({ error: "Server error" }, 500);
   }
 });

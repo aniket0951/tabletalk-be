@@ -6,6 +6,7 @@ import { CTX, STAFF_ROLE } from "../lib/constants";
 import { staffRepository } from "../repositories/staff.repository";
 import { staffService } from "../services/staff.service";
 import type { Env } from "../types";
+import { logger } from "../lib/logger";
 
 export const staffRoutes = new Hono<Env>();
 
@@ -17,7 +18,8 @@ staffRoutes.get("/", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const staff = await staffRepository.findMany(restaurantId);
     return c.json(staff);
-  } catch {
+  } catch (err) {
+    logger.error("GET /staff", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -56,7 +58,8 @@ staffRoutes.post("/", async (c) => {
     });
 
     return c.json(staff);
-  } catch {
+  } catch (err) {
+    logger.error("POST /staff", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -105,7 +108,8 @@ staffRoutes.patch("/:id", async (c) => {
     const staff = await staffRepository.update(id, data);
 
     return c.json(staff);
-  } catch {
+  } catch (err) {
+    logger.error("PATCH /staff/:id", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -123,7 +127,8 @@ staffRoutes.delete("/:id", async (c) => {
     await staffRepository.softDelete(id);
 
     return c.json({ success: true });
-  } catch {
+  } catch (err) {
+    logger.error("DELETE /staff/:id", err);
     return c.json({ error: "Server error" }, 500);
   }
 });

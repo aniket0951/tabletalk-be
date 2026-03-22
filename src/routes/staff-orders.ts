@@ -6,6 +6,7 @@ import { orderRepository } from "../repositories/order.repository";
 import { tableRepository } from "../repositories/table.repository";
 import { orderService, validateStatusTransition } from "../services/order.service";
 import type { Env } from "../types";
+import { logger } from "../lib/logger";
 
 export const staffOrdersRoutes = new Hono<Env>();
 
@@ -27,7 +28,8 @@ staffOrdersRoutes.get("/", async (c) => {
       dateFilter
     );
     return c.json(orders);
-  } catch {
+  } catch (err) {
+    logger.error("GET /staff/orders", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -67,7 +69,8 @@ staffOrdersRoutes.patch("/:id", async (c) => {
     // Lean response for staff UI
     const leanOrder = await orderRepository.findByIdWithStaffSelect(id);
     return c.json(leanOrder);
-  } catch {
+  } catch (err) {
+    logger.error("PATCH /staff/orders/:id", err);
     return c.json({ error: "Server error" }, 500);
   }
 });

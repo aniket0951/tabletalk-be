@@ -6,6 +6,7 @@ import { subscriptionRepository } from "../repositories/subscription.repository"
 import { invoiceRepository } from "../repositories/invoice.repository";
 import { billingService, BillingError } from "../services/billing.service";
 import type { Env } from "../types";
+import { logger } from "../lib/logger";
 
 export const billingRoutes = new Hono<Env>();
 
@@ -33,7 +34,8 @@ protectedRoutes.get("/subscription", async (c) => {
       : null;
 
     return c.json({ ...subscription, daysRemaining });
-  } catch {
+  } catch (err) {
+    logger.error("GET /billing/subscription", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -47,6 +49,7 @@ protectedRoutes.post("/subscription", async (c) => {
     return c.json(subscription);
   } catch (err) {
     if (err instanceof BillingError) return c.json({ error: err.message }, err.statusCode as 400);
+    logger.error("POST /billing/subscription", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -60,6 +63,7 @@ protectedRoutes.post("/checkout", async (c) => {
     return c.json(result);
   } catch (err: any) {
     if (err instanceof BillingError) return c.json({ error: err.message }, err.statusCode as 400);
+    logger.error("POST /billing/checkout", err);
     const detail = err?.error?.description || err?.message || String(err);
     return c.json({ error: "Server error", detail }, 500);
   }
@@ -73,6 +77,7 @@ protectedRoutes.post("/verify", async (c) => {
     return c.json({ success: true, subscription });
   } catch (err) {
     if (err instanceof BillingError) return c.json({ error: err.message }, err.statusCode as 400);
+    logger.error("POST /billing/verify", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -85,6 +90,7 @@ protectedRoutes.post("/cancel", async (c) => {
     return c.json({ success: true, subscription });
   } catch (err) {
     if (err instanceof BillingError) return c.json({ error: err.message }, err.statusCode as 400);
+    logger.error("POST /billing/cancel", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -95,7 +101,8 @@ protectedRoutes.get("/invoices", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const invoices = await invoiceRepository.findByRestaurant(restaurantId);
     return c.json(invoices);
-  } catch {
+  } catch (err) {
+    logger.error("GET /billing/invoices", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -112,6 +119,7 @@ webhookRoutes.post("/webhook", async (c) => {
     return c.json(result);
   } catch (err) {
     if (err instanceof BillingError) return c.json({ error: err.message }, err.statusCode as 400);
+    logger.error("POST /billing/webhook", err);
     return c.json({ error: "Server error" }, 500);
   }
 });

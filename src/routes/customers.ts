@@ -4,6 +4,7 @@ import { requireRestaurant } from "../middleware/require-restaurant";
 import { CTX } from "../lib/constants";
 import { customerRepository } from "../repositories/customer.repository";
 import type { Env } from "../types";
+import { logger } from "../lib/logger";
 
 export const customersRoutes = new Hono<Env>();
 
@@ -32,7 +33,8 @@ customersRoutes.get("/", async (c) => {
       stats: { totalCustomers, totalRevenue, avgSpendPerCustomer, repeatCustomers },
       pagination: { page, limit, totalFiltered, totalPages: Math.ceil(totalFiltered / limit) },
     });
-  } catch {
+  } catch (err) {
+    logger.error("GET /customers", err);
     return c.json({ error: "Server error" }, 500);
   }
 });

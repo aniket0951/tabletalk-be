@@ -7,6 +7,7 @@ import { CTX, ORDER_STATUS, SOCKET_EVENT } from "../lib/constants";
 import { orderRepository } from "../repositories/order.repository";
 import { orderService, OrderError, validateStatusTransition } from "../services/order.service";
 import type { Env } from "../types";
+import { logger } from "../lib/logger";
 
 export const ordersRoutes = new Hono<Env>();
 
@@ -62,7 +63,8 @@ ordersRoutes.get("/", async (c) => {
       totalAll,
       pagination: { page, limit, totalFiltered, totalPages: Math.ceil(totalFiltered / limit) },
     });
-  } catch {
+  } catch (err) {
+    logger.error("GET /orders", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -79,7 +81,8 @@ ordersRoutes.get("/:id", async (c) => {
     }
 
     return c.json(order);
-  } catch {
+  } catch (err) {
+    logger.error("GET /orders/:id", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -120,7 +123,8 @@ ordersRoutes.patch("/:id", async (c) => {
 
     emitSocketEvent(SOCKET_EVENT.ORDER_UPDATED, order);
     return c.json(order);
-  } catch {
+  } catch (err) {
+    logger.error("PATCH /orders/:id", err);
     return c.json({ error: "Server error" }, 500);
   }
 });
