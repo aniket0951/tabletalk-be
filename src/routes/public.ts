@@ -133,6 +133,57 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
   }
 });
 
+// PATCH /public/orders/:orderId/items — add items to an existing order
+publicRoutes.patch("/orders/:orderId/items", rateLimit(10, 5 * 60 * 1000), async (c) => {
+  try {
+    const orderId = c.req.param("orderId") as string;
+    const { customerPhone, items } = await c.req.json();
+
+    if (!customerPhone?.trim()) {
+      return c.json({ error: "Phone number is required" }, 400);
+    }
+
+    const cleanPhone = String(customerPhone).replace(/[\s\-()]/g, "").replace(/^\+91/, "");
+    if (!/^\d{10}$/.test(cleanPhone)) {
+      return c.json({ error: "Phone number must be exactly 10 digits" }, 400);
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return c.json({ error: "Items array is required" }, 400);
+    }
+
+    if (items.length > 50) {
+      return c.json({ error: "Too many items (max 50 per request)" }, 400);
+    }
+
+    for (const item of items) {
+      if (!item.menuItemId || typeof item.menuItemId !== "string") {
+        return c.json({ error: "Each item must have a valid menuItemId" }, 400);
+      }
+      const qty = Number(item.quantity);
+      if (!Number.isInteger(qty) || qty < 1 || qty > 99) {
+        return c.json({ error: "Item quantity must be between 1 and 99" }, 400);
+      }
+    }
+
+    const order = await orderService.addItems({
+      orderId,
+      customerPhone: cleanPhone,
+      items,
+    });
+
+    return c.json(order);
+  } catch (err) {
+    if (err instanceof OrderError) {
+      const body: Record<string, string> = { error: err.message };
+      if (err.code) body.code = err.code;
+      return c.json(body, err.statusCode as 400);
+    }
+    logger.error("PATCH /public/orders/:orderId/items", err);
+    return c.json({ error: "Server error" }, 500);
+  }
+});
+
 // GET /public/orders/active/:tableId — active (non-SETTLED) order on this table
 publicRoutes.get("/orders/active/:tableId", async (c) => {
   try {

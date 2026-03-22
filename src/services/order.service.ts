@@ -169,6 +169,77 @@ export async function createOrder(input: CreateOrderInput) {
   return order;
 }
 
+const ADDABLE_STATUSES = [ORDER_STATUS.NEW, ORDER_STATUS.COOKING, ORDER_STATUS.READY];
+const MAX_ITEMS_PER_ORDER = 50;
+
+export interface AddItemsInput {
+  orderId: string;
+  customerPhone: string;
+  items: { menuItemId: string; quantity: number }[];
+}
+
+export async function addItems(input: AddItemsInput) {
+  const { orderId, customerPhone, items } = input;
+
+  const order = await orderRepository.findByIdWithItems(orderId);
+  if (!order || order.isDeleted) {
+    throw new OrderError("Order not found", 404);
+  }
+
+  if (!ADDABLE_STATUSES.includes(order.status as typeof ORDER_STATUS.NEW)) {
+    throw new OrderError(
+      `Cannot add items to an order with status ${order.status}`,
+      409,
+      "ORDER_NOT_ADDABLE"
+    );
+  }
+
+  if (order.customerPhone !== customerPhone) {
+    throw new OrderError("Phone number does not match the order", 403);
+  }
+
+  // Check max items
+  const existingCount = order.items.reduce((sum, i) => sum + i.quantity, 0);
+  const newCount = items.reduce((sum, i) => sum + i.quantity, 0);
+  if (existingCount + newCount > MAX_ITEMS_PER_ORDER) {
+    throw new OrderError(`Cannot exceed ${MAX_ITEMS_PER_ORDER} items per order`, 400);
+  }
+
+  // Validate menu items
+  const { prisma } = await import("../lib/prisma");
+  const menuItemIds = items.map((i) => i.menuItemId);
+  const menuItems = await prisma.menuItem.findMany({
+    where: { id: { in: menuItemIds }, available: true, isDeleted: false },
+  });
+  if (menuItems.length !== menuItemIds.length) {
+    throw new OrderError("Some items are unavailable", 400);
+  }
+
+  const priceMap = new Map(menuItems.map((mi) => [mi.id, mi.price]));
+
+  let newSubtotal = 0;
+  const orderItems = items.map((i) => {
+    const unitPrice = priceMap.get(i.menuItemId)!;
+    const qty = Math.floor(Number(i.quantity));
+    newSubtotal += unitPrice * qty;
+    return { menuItemId: i.menuItemId, quantity: qty, unitPrice };
+  });
+
+  // Add existing items subtotal
+  const existingSubtotal = order.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+  const totalSubtotal = Math.round((existingSubtotal + newSubtotal) * 100) / 100;
+  const tax = Math.round(totalSubtotal * 0.05 * 100) / 100;
+  const total = Math.round((totalSubtotal + tax) * 100) / 100;
+
+  // Create new items and update totals
+  await orderRepository.addItems(orderId, orderItems);
+  const updatedOrder = await orderRepository.updateTotals(orderId, totalSubtotal, tax, total);
+
+  emitSocketEvent(SOCKET_EVENT.ORDER_UPDATED, updatedOrder);
+
+  return updatedOrder;
+}
+
 export class OrderError extends Error {
   constructor(
     message: string,
@@ -187,4 +258,5 @@ export const orderService = {
   settleOrder,
   generateOrderCode,
   createOrder,
+  addItems,
 };

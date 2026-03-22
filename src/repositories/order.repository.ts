@@ -183,6 +183,20 @@ export function findByIdWithItems(id: string) {
   });
 }
 
+export function addItems(orderId: string, items: { menuItemId: string; quantity: number; unitPrice: number }[]) {
+  return prisma.orderItem.createMany({
+    data: items.map((item) => ({ orderId, ...item })),
+  });
+}
+
+export function updateTotals(orderId: string, subtotal: number, tax: number, total: number) {
+  return prisma.order.update({
+    where: { id: orderId },
+    data: { subtotal, tax, total },
+    include: orderDetailInclude,
+  });
+}
+
 export const orderRepository = {
   findMany,
   count,
@@ -201,4 +215,6 @@ export const orderRepository = {
   updateWithBroadcastInclude,
   findByIdWithStaffSelect,
   findByIdWithItems,
+  addItems,
+  updateTotals,
 };
