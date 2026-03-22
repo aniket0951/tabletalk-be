@@ -113,10 +113,13 @@ describe("updateItem", () => {
 });
 
 describe("deleteItem", () => {
-  it("deletes by id", async () => {
-    prismaMock.menuItem.delete.mockResolvedValue({});
+  it("soft deletes by setting isDeleted", async () => {
+    prismaMock.menuItem.update.mockResolvedValue({});
     await deleteItem("item-1");
-    expect(prismaMock.menuItem.delete).toHaveBeenCalledWith({ where: { id: "item-1" } });
+    expect(prismaMock.menuItem.update).toHaveBeenCalledWith({
+      where: { id: "item-1" },
+      data: { isDeleted: true },
+    });
   });
 });
 

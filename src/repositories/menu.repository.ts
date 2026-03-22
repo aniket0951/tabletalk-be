@@ -73,7 +73,10 @@ export function updateItem(id: string, data: Record<string, unknown>) {
 }
 
 export function deleteItem(id: string) {
-  return prisma.menuItem.delete({ where: { id } });
+  return prisma.menuItem.update({
+    where: { id },
+    data: { isDeleted: true },
+  });
 }
 
 export function createCategory(
