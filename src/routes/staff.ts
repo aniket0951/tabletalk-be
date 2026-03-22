@@ -3,7 +3,7 @@ import { ownerAuth } from "../middleware/owner-auth";
 import { subscriptionGuard } from "../middleware/subscription-guard";
 import { requireRestaurant } from "../middleware/require-restaurant";
 import { CTX, STAFF_ROLE } from "../lib/constants";
-import { logAudit } from "../lib/audit";
+
 import { staffRepository } from "../repositories/staff.repository";
 import { staffService } from "../services/staff.service";
 import type { Env } from "../types";
@@ -58,7 +58,6 @@ staffRoutes.post("/", async (c) => {
       restaurantId,
     });
 
-    logAudit({ restaurantId, actorType: "owner", actorId: c.get(CTX.USER_ID), action: "staff.created", entity: "staff", entityId: staff.id, details: { name, role: role || "WAITER" } });
     return c.json(staff);
   } catch (err) {
     logger.error("POST /staff", err);
@@ -128,7 +127,6 @@ staffRoutes.delete("/:id", async (c) => {
 
     await staffRepository.softDelete(id);
 
-    logAudit({ restaurantId: existing.restaurantId, actorType: "owner", action: "staff.deleted", entity: "staff", entityId: id, details: { name: existing.name } });
     return c.json({ success: true });
   } catch (err) {
     logger.error("DELETE /staff/:id", err);

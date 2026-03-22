@@ -5,7 +5,7 @@ import { ORDER_STATUS, SOCKET_EVENT } from "../lib/constants";
 import { orderRepository } from "../repositories/order.repository";
 import { tableRepository } from "../repositories/table.repository";
 import { orderService, validateStatusTransition } from "../services/order.service";
-import { logAudit } from "../lib/audit";
+
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
 
@@ -66,16 +66,6 @@ staffOrdersRoutes.patch("/:id", async (c) => {
         emitSocketEvent(SOCKET_EVENT.TABLE_UPDATED, { id: existing.tableId, status: "FREE" });
       }
     }
-
-    logAudit({
-      restaurantId: payload.restaurantId,
-      actorType: "staff",
-      actorId: payload.staffId,
-      action: "order.status_changed",
-      entity: "order",
-      entityId: id,
-      details: { from: existing.status, to: status },
-    });
 
     // Lean response for staff UI
     const leanOrder = await orderRepository.findByIdWithStaffSelect(id);

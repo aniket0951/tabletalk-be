@@ -5,7 +5,7 @@ import { CTX } from "../lib/constants";
 import { subscriptionRepository } from "../repositories/subscription.repository";
 import { invoiceRepository } from "../repositories/invoice.repository";
 import { billingService, BillingError } from "../services/billing.service";
-import { logAudit } from "../lib/audit";
+
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
 
@@ -47,7 +47,6 @@ protectedRoutes.post("/subscription", async (c) => {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const { plan } = await c.req.json();
     const subscription = await billingService.createTrialSubscription(restaurantId, plan);
-    logAudit({ restaurantId, actorType: "owner", actorId: c.get(CTX.USER_ID), action: "subscription.trial_created", entity: "subscription", entityId: subscription.id, details: { plan } });
     return c.json(subscription);
   } catch (err) {
     if (err instanceof BillingError) return c.json({ error: err.message }, err.statusCode as 400);
@@ -89,7 +88,6 @@ protectedRoutes.post("/cancel", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const subscription = await billingService.cancelSubscription(restaurantId);
-    logAudit({ restaurantId, actorType: "owner", actorId: c.get(CTX.USER_ID), action: "subscription.cancelled", entity: "subscription", entityId: subscription.id });
     return c.json({ success: true, subscription });
   } catch (err) {
     if (err instanceof BillingError) return c.json({ error: err.message }, err.statusCode as 400);
