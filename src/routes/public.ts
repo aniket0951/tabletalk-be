@@ -87,8 +87,6 @@ publicRoutes.get("/offers/:restaurantId", async (c) => {
       menuItemIds: o.menuItemIds,
       categoryIds: o.categoryIds,
       daysOfWeek: o.daysOfWeek,
-      startTime: o.startTime,
-      endTime: o.endTime,
       startDate: o.startDate,
       endDate: o.endDate,
       requiresCode: !!o.promoCode,

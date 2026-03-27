@@ -142,7 +142,7 @@ model Order {
   billedAt      DateTime?
   settledAt     DateTime?
   items         OrderItem[]
-  discounts     OrderDiscount[]
+  orderDiscounts OrderDiscount[]
   ratings       MenuItemRating[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -341,6 +341,41 @@ enum TableStatus {
   OCCUPIED
 }
 
+model AuditLog {
+  id           String   @id @default(cuid())
+  restaurantId String
+  actorType    String   // "owner" | "staff" | "system"
+  actorId      String?  // userId or staffId
+  action       String   // e.g. "order.status_changed", "staff.created"
+  entity       String   // e.g. "order", "staff", "table"
+  entityId     String?
+  details      String?  // JSON string with before/after or extra context
+  createdAt    DateTime @default(now())
+
+  @@index([restaurantId, createdAt])
+  @@index([entity, entityId])
+}
+
+enum OrderStatus {
+  NEW
+  COOKING
+  READY
+  BILLED
+  SETTLED
+}
+
+enum InvoiceStatus {
+  PAID
+  PENDING
+  FAILED
+  REFUNDED
+}
+
+enum StaffRole {
+  WAITER
+  CAPTAIN
+}
+
 model Offer {
   id              String       @id @default(cuid())
   restaurantId    String
@@ -354,8 +389,6 @@ model Offer {
   menuItemIds     String[]     @default([])
   categoryIds     String[]     @default([])
   daysOfWeek      Int[]        @default([])
-  startTime       String?
-  endTime         String?
   startDate       DateTime?
   endDate         DateTime?
   active          Boolean      @default(true)
@@ -391,39 +424,4 @@ enum OfferType {
 enum DiscountType {
   PERCENTAGE
   FLAT
-}
-
-model AuditLog {
-  id           String   @id @default(cuid())
-  restaurantId String
-  actorType    String   // "owner" | "staff" | "system"
-  actorId      String?  // userId or staffId
-  action       String   // e.g. "order.status_changed", "staff.created"
-  entity       String   // e.g. "order", "staff", "table"
-  entityId     String?
-  details      String?  // JSON string with before/after or extra context
-  createdAt    DateTime @default(now())
-
-  @@index([restaurantId, createdAt])
-  @@index([entity, entityId])
-}
-
-enum OrderStatus {
-  NEW
-  COOKING
-  READY
-  BILLED
-  SETTLED
-}
-
-enum InvoiceStatus {
-  PAID
-  PENDING
-  FAILED
-  REFUNDED
-}
-
-enum StaffRole {
-  WAITER
-  CAPTAIN
 }

@@ -30,8 +30,6 @@ export const offerRepository = {
     menuItemIds?: string[];
     categoryIds?: string[];
     daysOfWeek?: number[];
-    startTime?: string | null;
-    endTime?: string | null;
     startDate?: Date | null;
     endDate?: Date | null;
     promoCode?: string | null;

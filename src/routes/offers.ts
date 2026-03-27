@@ -45,8 +45,6 @@ offerRoutes.post("/", async (c) => {
       menuItemIds: body.menuItemIds || [],
       categoryIds: body.categoryIds || [],
       daysOfWeek: body.daysOfWeek || [],
-      startTime: body.startTime || null,
-      endTime: body.endTime || null,
       startDate: body.startDate ? new Date(body.startDate) : null,
       endDate: body.endDate ? new Date(body.endDate) : null,
       promoCode: body.promoCode || null,
@@ -82,8 +80,6 @@ offerRoutes.patch("/:id", async (c) => {
     if (body.menuItemIds !== undefined) data.menuItemIds = body.menuItemIds;
     if (body.categoryIds !== undefined) data.categoryIds = body.categoryIds;
     if (body.daysOfWeek !== undefined) data.daysOfWeek = body.daysOfWeek;
-    if (body.startTime !== undefined) data.startTime = body.startTime || null;
-    if (body.endTime !== undefined) data.endTime = body.endTime || null;
     if (body.startDate !== undefined) data.startDate = body.startDate ? new Date(body.startDate) : null;
     if (body.endDate !== undefined) data.endDate = body.endDate ? new Date(body.endDate) : null;
     if (body.promoCode !== undefined) data.promoCode = body.promoCode || null;

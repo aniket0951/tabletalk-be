@@ -1,4 +1,3 @@
-import { offerRepository } from "../repositories/offer.repository";
 import { OFFER_TYPE, DISCOUNT_TYPE } from "../lib/constants";
 
 interface OfferRow {
@@ -11,8 +10,6 @@ interface OfferRow {
   menuItemIds: string[];
   categoryIds: string[];
   daysOfWeek: number[];
-  startTime: string | null;
-  endTime: string | null;
   startDate: Date | null;
   endDate: Date | null;
   promoCode: string | null;
@@ -48,12 +45,6 @@ function isScheduleActive(offer: OfferRow, now: Date): boolean {
 
   // Check day of week (0=Sun..6=Sat)
   if (offer.daysOfWeek.length > 0 && !offer.daysOfWeek.includes(now.getDay())) return false;
-
-  // Check time window (HH:MM format, in local time)
-  if (offer.startTime && offer.endTime) {
-    const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-    if (hhmm < offer.startTime || hhmm > offer.endTime) return false;
-  }
 
   return true;
 }
@@ -100,7 +91,6 @@ export function calculateDiscounts(
 
   for (const offer of itemOffers) {
     let discountAmount = 0;
-    const matchedItems: string[] = [];
 
     for (const item of items) {
       const matchesItem = offer.menuItemIds.length === 0 || offer.menuItemIds.includes(item.menuItemId);
@@ -109,7 +99,6 @@ export function calculateDiscounts(
       if (matchesItem && matchesCat) {
         const itemTotal = item.unitPrice * item.quantity;
         discountAmount += calcDiscount(offer.discountType, offer.discountValue, itemTotal, null);
-        matchedItems.push(item.menuItemId);
       }
     }
 

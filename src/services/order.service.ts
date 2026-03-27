@@ -267,7 +267,7 @@ export async function addItems(input: AddItemsInput) {
   const allItems = [
     ...order.items.map((i) => ({
       menuItemId: i.menuItemId,
-      categoryId: "", // existing items — skip category matching for simplicity
+      categoryId: "",
       unitPrice: i.unitPrice,
       quantity: i.quantity,
     })),
