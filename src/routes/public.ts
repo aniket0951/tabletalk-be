@@ -7,6 +7,7 @@ import { tableRepository } from "../repositories/table.repository";
 import { menuRepository } from "../repositories/menu.repository";
 import { ratingRepository } from "../repositories/rating.repository";
 import { orderService, OrderError } from "../services/order.service";
+import { offerRepository } from "../repositories/offer.repository";
 import { logger } from "../lib/logger";
 import { success, validationError, serverError } from "../lib/response";
 
@@ -69,10 +70,41 @@ publicRoutes.get("/menu/:restaurantId/category/:categoryId", async (c) => {
   }
 });
 
+// GET /public/offers/:restaurantId — active offers for menu display
+publicRoutes.get("/offers/:restaurantId", async (c) => {
+  try {
+    const restaurantId = c.req.param("restaurantId");
+    const offers = await offerRepository.findActive(restaurantId);
+
+    // Only expose safe fields to public
+    const publicOffers = offers.map((o) => ({
+      id: o.id,
+      name: o.name,
+      type: o.type,
+      discountType: o.discountType,
+      discountValue: o.discountValue,
+      minOrderAmount: o.minOrderAmount,
+      menuItemIds: o.menuItemIds,
+      categoryIds: o.categoryIds,
+      daysOfWeek: o.daysOfWeek,
+      startTime: o.startTime,
+      endTime: o.endTime,
+      startDate: o.startDate,
+      endDate: o.endDate,
+      requiresCode: !!o.promoCode,
+    }));
+
+    return success(c, publicOffers, "Active offers fetched");
+  } catch (err) {
+    logger.error("GET /public/offers/:restaurantId", err);
+    return serverError(c, err instanceof Error ? err.message : undefined);
+  }
+});
+
 // POST /public/orders — create order from customer
 publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
   try {
-    const { tableId, customerPhone, customerName, specialNote, items } =
+    const { tableId, customerPhone, customerName, specialNote, promoCode, items } =
       await c.req.json();
 
     if (!tableId || !items?.length) {
@@ -119,6 +151,7 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
       customerPhone: cleanPhone,
       customerName,
       specialNote,
+      promoCode: promoCode?.trim(),
       items,
     });
 

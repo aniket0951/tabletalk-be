@@ -23,6 +23,7 @@ import { billingRoutes } from "./routes/billing";
 import { userRoutes } from "./routes/user";
 import { publicRoutes } from "./routes/public";
 import { campaignRoutes } from "./routes/campaigns";
+import { offerRoutes } from "./routes/offers";
 import { rateLimit } from "./middleware/rate-limit";
 import { success, serverError } from "./lib/response";
 
@@ -70,6 +71,7 @@ app.use("/orders/*", rateLimit(100, 60 * 1000));
 app.use("/customers/*", rateLimit(100, 60 * 1000));
 app.use("/dashboard/*", rateLimit(100, 60 * 1000));
 app.use("/campaigns/*", rateLimit(100, 60 * 1000));
+app.use("/offers/*", rateLimit(100, 60 * 1000));
 app.use("/user/*", rateLimit(100, 60 * 1000));
 
 // Mount routes
@@ -87,6 +89,7 @@ app.route("/billing", billingRoutes);
 app.route("/user", userRoutes);
 app.route("/public", publicRoutes);
 app.route("/campaigns", campaignRoutes);
+app.route("/offers", offerRoutes);
 
 const PORT = parseInt(process.env.PORT || "3004", 10);
 

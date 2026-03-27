@@ -39,6 +39,14 @@ vi.mock("../../repositories/table.repository", () => ({
   },
 }));
 
+vi.mock("../../repositories/offer.repository", () => ({
+  offerRepository: {
+    findActive: vi.fn().mockResolvedValue([]),
+    createOrderDiscount: vi.fn(),
+    incrementUsage: vi.fn(),
+  },
+}));
+
 import {
   parseDateFilter,
   buildStatusUpdateData,
@@ -275,8 +283,8 @@ describe("createOrder", () => {
       restaurantId: "rest-1",
     } as never);
     vi.mocked(prisma.menuItem.findMany).mockResolvedValue([
-      { id: "item-1", price: 200 },
-      { id: "item-2", price: 300 },
+      { id: "item-1", price: 200, categoryId: "cat-1" },
+      { id: "item-2", price: 300, categoryId: "cat-1" },
     ] as never);
     vi.mocked(prisma.order.count).mockResolvedValue(0);
     vi.mocked(upsertCustomer).mockResolvedValue("cust-1");
@@ -418,7 +426,7 @@ describe("createOrder edge cases", () => {
       restaurantId: "rest-1",
     } as never);
     vi.mocked(prisma.menuItem.findMany).mockResolvedValue([
-      { id: "item-1", price: 100 },
+      { id: "item-1", price: 100, categoryId: "cat-1" },
     ] as never);
     vi.mocked(prisma.order.count).mockResolvedValue(0);
     vi.mocked(upsertCustomer).mockResolvedValue("cust-1");

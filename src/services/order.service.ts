@@ -1,8 +1,10 @@
 import { orderRepository } from "../repositories/order.repository";
 import { tableRepository } from "../repositories/table.repository";
+import { offerRepository } from "../repositories/offer.repository";
 import { emitSocketEvent } from "../lib/socket";
 import { upsertCustomer } from "../lib/customer";
 import { ORDER_STATUS, TABLE_STATUS, SOCKET_EVENT } from "../lib/constants";
+import { calculateDiscounts } from "./offer.service";
 
 export const timestampMap: Record<string, string> = {
   COOKING: "cookingAt",
@@ -94,11 +96,12 @@ export interface CreateOrderInput {
   customerPhone: string;
   customerName?: string;
   specialNote?: string;
+  promoCode?: string;
   items: { menuItemId: string; quantity: number }[];
 }
 
 export async function createOrder(input: CreateOrderInput) {
-  const { tableId, customerPhone, customerName, specialNote, items } = input;
+  const { tableId, customerPhone, customerName, specialNote, promoCode, items } = input;
 
   const table = await tableRepository.findByIdFull(tableId);
   if (!table || table.isDeleted) {
@@ -114,17 +117,19 @@ export async function createOrder(input: CreateOrderInput) {
 
   const restaurantId = table.restaurantId;
 
-  // Fetch menu items to get prices
+  // Fetch menu items to get prices + categoryId for offer matching
   const { prisma } = await import("../lib/prisma");
   const menuItemIds = items.map((i) => i.menuItemId);
   const menuItems = await prisma.menuItem.findMany({
     where: { id: { in: menuItemIds }, available: true, isDeleted: false },
+    select: { id: true, price: true, categoryId: true },
   });
   if (menuItems.length !== menuItemIds.length) {
     throw new OrderError("Some items are unavailable", 400);
   }
 
   const priceMap = new Map(menuItems.map((mi) => [mi.id, mi.price]));
+  const catMap = new Map(menuItems.map((mi) => [mi.id, mi.categoryId]));
 
   let subtotal = 0;
   const orderItems = items.map((i) => {
@@ -134,8 +139,24 @@ export async function createOrder(input: CreateOrderInput) {
     return { menuItemId: i.menuItemId, quantity: qty, unitPrice };
   });
 
+  // Calculate discounts from active offers
+  const activeOffers = await offerRepository.findActive(restaurantId);
+  const discountItems = orderItems.map((oi) => ({
+    menuItemId: oi.menuItemId,
+    categoryId: catMap.get(oi.menuItemId) || "",
+    unitPrice: oi.unitPrice,
+    quantity: oi.quantity,
+  }));
+  const { appliedDiscounts, totalDiscount } = calculateDiscounts(
+    activeOffers as never[],
+    discountItems,
+    subtotal,
+    promoCode,
+  );
+
+  const discount = totalDiscount;
   const tax = Math.round(subtotal * 0.05 * 100) / 100;
-  const total = Math.round((subtotal + tax) * 100) / 100;
+  const total = Math.round((subtotal - discount + tax) * 100) / 100;
 
   const orderCode = await generateOrderCode(restaurantId);
 
@@ -155,11 +176,24 @@ export async function createOrder(input: CreateOrderInput) {
     customerId,
     specialNote: specialNote || "",
     subtotal,
+    discount,
     tax,
     total,
     status: ORDER_STATUS.NEW,
     items: { create: orderItems },
   });
+
+  // Record applied discounts and increment usage
+  for (const ad of appliedDiscounts) {
+    await offerRepository.createOrderDiscount({
+      orderId: order.id,
+      offerId: ad.offerId,
+      type: ad.type,
+      discountAmount: ad.discountAmount,
+      description: ad.description,
+    });
+    await offerRepository.incrementUsage(ad.offerId);
+  }
 
   await tableRepository.update(tableId, { status: TABLE_STATUS.OCCUPIED });
 
@@ -228,12 +262,32 @@ export async function addItems(input: AddItemsInput) {
   // Add existing items subtotal
   const existingSubtotal = order.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
   const totalSubtotal = Math.round((existingSubtotal + newSubtotal) * 100) / 100;
+
+  // Recalculate discounts with all items (existing + new)
+  const allItems = [
+    ...order.items.map((i) => ({
+      menuItemId: i.menuItemId,
+      categoryId: "", // existing items — skip category matching for simplicity
+      unitPrice: i.unitPrice,
+      quantity: i.quantity,
+    })),
+    ...orderItems.map((oi) => ({
+      menuItemId: oi.menuItemId,
+      categoryId: "",
+      unitPrice: oi.unitPrice,
+      quantity: oi.quantity,
+    })),
+  ];
+  const activeOffers = await offerRepository.findActive(order.restaurantId);
+  const { totalDiscount } = calculateDiscounts(activeOffers as never[], allItems, totalSubtotal);
+
+  const discount = totalDiscount;
   const tax = Math.round(totalSubtotal * 0.05 * 100) / 100;
-  const total = Math.round((totalSubtotal + tax) * 100) / 100;
+  const total = Math.round((totalSubtotal - discount + tax) * 100) / 100;
 
   // Create new items and update totals
   await orderRepository.addItems(orderId, orderItems);
-  const updatedOrder = await orderRepository.updateTotals(orderId, totalSubtotal, tax, total);
+  const updatedOrder = await orderRepository.updateTotals(orderId, totalSubtotal, tax, total, discount);
 
   emitSocketEvent(SOCKET_EVENT.ORDER_UPDATED, updatedOrder);
 

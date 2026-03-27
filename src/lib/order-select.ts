@@ -19,6 +19,7 @@ export const orderDetailSelect = {
   orderCode: true,
   status: true,
   subtotal: true,
+  discount: true,
   tax: true,
   total: true,
   placedAt: true,

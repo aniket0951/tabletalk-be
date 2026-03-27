@@ -189,10 +189,12 @@ export function addItems(orderId: string, items: { menuItemId: string; quantity:
   });
 }
 
-export function updateTotals(orderId: string, subtotal: number, tax: number, total: number) {
+export function updateTotals(orderId: string, subtotal: number, tax: number, total: number, discount?: number) {
+  const data: Record<string, number> = { subtotal, tax, total };
+  if (discount !== undefined) data.discount = discount;
   return prisma.order.update({
     where: { id: orderId },
-    data: { subtotal, tax, total },
+    data,
     include: orderDetailInclude,
   });
 }

@@ -38,29 +38,41 @@ beforeEach(() => {
 
 describe("register", () => {
   it("throws on missing fields", async () => {
-    await expect(register("", "a@b.com", "password")).rejects.toThrow("Missing fields");
-    await expect(register("John", "", "password")).rejects.toThrow("Missing fields");
-    await expect(register("John", "a@b.com", "")).rejects.toThrow("Missing fields");
+    await expect(register("", "a@b.com", "password")).rejects.toThrow(
+      "Missing fields",
+    );
+    await expect(register("John", "", "password")).rejects.toThrow(
+      "Missing fields",
+    );
+    await expect(register("John", "a@b.com", "")).rejects.toThrow(
+      "Missing fields",
+    );
   });
 
   it("throws on short password", async () => {
     await expect(register("John", "a@b.com", "short")).rejects.toThrow(
-      "Password must be at least 8 characters"
+      "Password must be at least 8 characters",
     );
   });
 
   it("throws on too long password", async () => {
-    await expect(register("John", "a@b.com", "x".repeat(129))).rejects.toThrow("Password too long");
+    await expect(register("John", "a@b.com", "x".repeat(129))).rejects.toThrow(
+      "Password too long",
+    );
   });
 
   it("throws on invalid email format", async () => {
-    await expect(register("John", "not-email", "password123")).rejects.toThrow("Invalid email format");
+    await expect(register("John", "not-email", "password123")).rejects.toThrow(
+      "Invalid email format",
+    );
   });
 
   it("throws when email already registered", async () => {
-    vi.mocked(userRepository.findByEmail).mockResolvedValue({ id: "existing" } as never);
+    vi.mocked(userRepository.findByEmail).mockResolvedValue({
+      id: "existing",
+    } as never);
     await expect(register("John", "a@b.com", "password123")).rejects.toThrow(
-      "Email already registered"
+      "Email already registered",
     );
   });
 
@@ -83,7 +95,7 @@ describe("register", () => {
         name: "John",
         email: "a@b.com",
         passwordHash: "hashed-password",
-      })
+      }),
     );
   });
 });
@@ -96,7 +108,9 @@ describe("login", () => {
 
   it("throws when user not found", async () => {
     vi.mocked(userRepository.findByEmail).mockResolvedValue(null);
-    await expect(login("a@b.com", "password")).rejects.toThrow("Invalid credentials");
+    await expect(login("a@b.com", "password")).rejects.toThrow(
+      "Invalid credentials",
+    );
   });
 
   it("throws when password is wrong", async () => {
@@ -106,7 +120,9 @@ describe("login", () => {
     } as never);
     vi.mocked(compare).mockResolvedValue(false as never);
 
-    await expect(login("a@b.com", "wrong")).rejects.toThrow("Invalid credentials");
+    await expect(login("a@b.com", "wrong")).rejects.toThrow(
+      "Invalid credentials",
+    );
   });
 
   it("returns token when credentials valid", async () => {
@@ -117,7 +133,9 @@ describe("login", () => {
       passwordHash: "hash",
     } as never);
     vi.mocked(compare).mockResolvedValue(true as never);
-    vi.mocked(prisma.restaurant.findFirst).mockResolvedValue({ id: "rest-1" } as never);
+    vi.mocked(prisma.restaurant.findFirst).mockResolvedValue({
+      id: "rest-1",
+    } as never);
 
     const result = await login("a@b.com", "password");
     expect(result.token).toBe("mock-token");

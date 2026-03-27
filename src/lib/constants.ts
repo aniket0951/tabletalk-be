@@ -74,6 +74,16 @@ export const SERVICE_MODE = {
   WALK_IN: "WALK_IN",
 } as const;
 
+export const OFFER_TYPE = {
+  ITEM_DISCOUNT: "ITEM_DISCOUNT",
+  BILL_DISCOUNT: "BILL_DISCOUNT",
+} as const;
+
+export const DISCOUNT_TYPE = {
+  PERCENTAGE: "PERCENTAGE",
+  FLAT: "FLAT",
+} as const;
+
 export const SOCKET_EVENT = {
   ORDER_CREATED: "order:created",
   ORDER_UPDATED: "order:updated",

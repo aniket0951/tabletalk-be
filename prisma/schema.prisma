@@ -36,6 +36,7 @@ model Restaurant {
   customers      Customer[]
   ratings        MenuItemRating[]
   campaigns      Campaign[]
+  offers         Offer[]
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   isDeleted      Boolean          @default(false)
@@ -131,6 +132,7 @@ model Order {
   status        OrderStatus @default(NEW)
   specialNote   String      @default("")
   subtotal      Float       @default(0)
+  discount      Float       @default(0)
   tax           Float       @default(0)
   total         Float       @default(0)
   placedAt      DateTime    @default(now())
@@ -140,6 +142,7 @@ model Order {
   billedAt      DateTime?
   settledAt     DateTime?
   items         OrderItem[]
+  discounts     OrderDiscount[]
   ratings       MenuItemRating[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -336,6 +339,58 @@ enum MenuItemType {
 enum TableStatus {
   FREE
   OCCUPIED
+}
+
+model Offer {
+  id              String       @id @default(cuid())
+  restaurantId    String
+  restaurant      Restaurant   @relation(fields: [restaurantId], references: [id])
+  name            String
+  type            OfferType
+  discountType    DiscountType
+  discountValue   Float
+  minOrderAmount  Float?
+  maxDiscount     Float?
+  menuItemIds     String[]     @default([])
+  categoryIds     String[]     @default([])
+  daysOfWeek      Int[]        @default([])
+  startTime       String?
+  endTime         String?
+  startDate       DateTime?
+  endDate         DateTime?
+  active          Boolean      @default(true)
+  promoCode       String?
+  usageLimit      Int?
+  usageCount      Int          @default(0)
+  orderDiscounts  OrderDiscount[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  isDeleted       Boolean      @default(false)
+
+  @@index([restaurantId, active])
+}
+
+model OrderDiscount {
+  id             String  @id @default(cuid())
+  orderId        String
+  order          Order   @relation(fields: [orderId], references: [id])
+  offerId        String
+  offer          Offer   @relation(fields: [offerId], references: [id])
+  type           OfferType
+  discountAmount Float
+  description    String
+
+  @@index([orderId])
+}
+
+enum OfferType {
+  ITEM_DISCOUNT
+  BILL_DISCOUNT
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FLAT
 }
 
 model AuditLog {
