@@ -12,6 +12,44 @@ export const restaurantRoutes = new Hono<Env>();
 
 restaurantRoutes.use("*", ownerAuth);
 
+// GET /restaurants — list all branches for the logged-in user
+restaurantRoutes.get("/all", async (c) => {
+  try {
+    const userId = c.get(CTX.USER_ID);
+    const restaurants = await restaurantRepository.findAllByUserId(userId);
+    return success(c, restaurants, "Restaurants fetched");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return serverError(c, message);
+  }
+});
+
+// POST /restaurant/switch — swap active branch, returns new JWT
+restaurantRoutes.post("/switch", async (c) => {
+  try {
+    const userId = c.get(CTX.USER_ID);
+    const email = c.get(CTX.EMAIL);
+    const { restaurantId } = await c.req.json();
+
+    if (!restaurantId) return validationError(c, "restaurantId is required");
+
+    const restaurant = await restaurantRepository.findByIdBasic(restaurantId);
+    if (!restaurant || restaurant.isDeleted || restaurant.userId !== userId) {
+      return validationError(c, "Restaurant not found");
+    }
+
+    const newToken = await createOwnerToken({ userId, email, restaurantId });
+
+    return success(c, {
+      token: newToken,
+      restaurant: { id: restaurant.id, name: restaurant.name, city: restaurant.city },
+    }, "Switched branch");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return serverError(c, message);
+  }
+});
+
 // GET /restaurant
 restaurantRoutes.get("/", requireRestaurant, async (c) => {
   try {
