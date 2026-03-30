@@ -26,6 +26,7 @@ import { campaignRoutes } from "./routes/campaigns";
 import { offerRoutes } from "./routes/offers";
 import { rateLimit } from "./middleware/rate-limit";
 import { success, serverError } from "./lib/response";
+import { RequestHeaders } from "./lib/constants";
 
 const app = new Hono<Env>();
 
@@ -50,9 +51,9 @@ app.use(
   cors({
     origin: "*",
     credentials: false,
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: [RequestHeaders.ContentType, RequestHeaders.Authorization],
     allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-  })
+  }),
 );
 
 app.get("/health", async (c) => {
@@ -93,9 +94,12 @@ app.route("/offers", offerRoutes);
 
 const PORT = parseInt(process.env.PORT || "3004", 10);
 
-const server = serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" }, (info) => {
-  console.log(`[api] Hono server running on http://0.0.0.0:${info.port}`);
-});
+const server = serve(
+  { fetch: app.fetch, port: PORT, hostname: "0.0.0.0" },
+  (info) => {
+    console.log(`[api] Hono server running on http://0.0.0.0:${info.port}`);
+  },
+);
 
 // Attach Socket.IO to the same HTTP server
 const io = new Server(server, {
@@ -137,14 +141,15 @@ io.use(async (socket, next) => {
 });
 
 io.on("connection", (socket) => {
-  socket.on("disconnect", () => {
-  });
+  socket.on("disconnect", () => {});
 });
 
 // Keep-alive cron: ping DB every 5 minutes to prevent Supabase cold starts
-setInterval(async () => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-  } catch {
-  }
-}, 5 * 60 * 1000);
+setInterval(
+  async () => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {}
+  },
+  5 * 60 * 1000,
+);

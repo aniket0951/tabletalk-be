@@ -66,6 +66,8 @@ restaurantRoutes.get("/", requireRestaurant, async (c) => {
       upiId: restaurant.upiId,
       serviceMode: restaurant.serviceMode,
       restaurantCode: restaurant.restaurantCode,
+      isPrimary: restaurant.isPrimary,
+      branchAlias: restaurant.branchAlias,
       tableCount: restaurant._count.tables,
     }, "Restaurant fetched");
   } catch (error) {
@@ -85,6 +87,7 @@ restaurantRoutes.patch("/", requireRestaurant, async (c) => {
     if (body.phone !== undefined) data.phone = body.phone;
     if (body.city !== undefined) data.city = body.city;
     if (body.upiId !== undefined) data.upiId = body.upiId;
+    if (body.branchAlias !== undefined) data.branchAlias = body.branchAlias;
     if (body.serviceMode !== undefined) {
       if (
         ![SERVICE_MODE.DINE_IN, SERVICE_MODE.WALK_IN].includes(body.serviceMode)
@@ -120,11 +123,17 @@ restaurantRoutes.post("/", async (c) => {
       return validationError(c, "Name and phone are required");
     }
 
+    // First restaurant for this user is always the primary branch
+    const existingCount = await restaurantRepository.countByUserId(userId);
+    const isPrimary = existingCount === 0;
+
     const restaurant = await restaurantRepository.create({
       name: body.name,
       phone: body.phone,
       city: body.city || "",
       serviceMode: body.serviceMode || SERVICE_MODE.DINE_IN,
+      branchAlias: body.branchAlias || "",
+      isPrimary,
       userId,
     });
 
@@ -138,6 +147,7 @@ restaurantRoutes.post("/", async (c) => {
     return success(c, {
       id: restaurant.id,
       name: restaurant.name,
+      isPrimary: restaurant.isPrimary,
       token: newToken,
     }, "Restaurant created");
   } catch (error) {

@@ -29,9 +29,13 @@ export function update(id: string, data: Record<string, unknown>) {
 export function findAllByUserId(userId: string) {
   return prisma.restaurant.findMany({
     where: { userId, isDeleted: false },
-    select: { id: true, name: true, city: true, serviceMode: true, createdAt: true },
-    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true, city: true, serviceMode: true, isPrimary: true, branchAlias: true, createdAt: true },
+    orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
   });
+}
+
+export function countByUserId(userId: string) {
+  return prisma.restaurant.count({ where: { userId, isDeleted: false } });
 }
 
 export function findByCode(code: string) {
@@ -51,4 +55,5 @@ export const restaurantRepository = {
   findByCode,
   findByCodeActive,
   findAllByUserId,
+  countByUserId,
 };

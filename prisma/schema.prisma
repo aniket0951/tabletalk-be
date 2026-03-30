@@ -26,6 +26,8 @@ model Restaurant {
   upiId          String           @default("")
   serviceMode    ServiceMode      @default(DINE_IN)
   restaurantCode String?          @unique
+  isPrimary      Boolean          @default(false)
+  branchAlias    String           @default("")
   userId         String
   user           User             @relation(fields: [userId], references: [id])
   subscriptions  Subscription[]

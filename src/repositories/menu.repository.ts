@@ -1,3 +1,4 @@
+import { MenuCategories } from "../lib/constants";
 import { prisma } from "../lib/prisma";
 
 export function findCategories(restaurantId: string) {
@@ -98,9 +99,9 @@ export function countCategories(restaurantId: string) {
 
 export function seedDefaults(restaurantId: string) {
   const defaultCategories = [
-    { name: "Starters", emoji: "\uD83E\uDD57", sortOrder: 0 },
-    { name: "Mains", emoji: "\uD83C\uDF5B", sortOrder: 1 },
-    { name: "Desserts", emoji: "\uD83C\uDF70", sortOrder: 2 },
+    { name: MenuCategories.Starters, emoji: "\uD83E\uDD57", sortOrder: 0 },
+    { name: MenuCategories.Mains, emoji: "\uD83C\uDF5B", sortOrder: 1 },
+    { name: MenuCategories.Desserts, emoji: "\uD83C\uDF70", sortOrder: 2 },
   ];
   return prisma.menuCategory.createMany({
     data: defaultCategories.map((cat) => ({ ...cat, restaurantId })),

@@ -89,3 +89,16 @@ export const SOCKET_EVENT = {
   ORDER_UPDATED: "order:updated",
   TABLE_UPDATED: "table:updated",
 } as const;
+
+export const RequestHeaders = {
+  Authorization: "Authorization",
+  XForwardedFor: "x-forwarded-for",
+  XRealIP: "x-real-ip",
+  ContentType: "Content-Type",
+} as const;
+
+export const MenuCategories = {
+  Starters: "Starters",
+  Mains: "Mains",
+  Desserts: "Desserts",
+} as const;

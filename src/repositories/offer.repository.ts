@@ -43,11 +43,17 @@ export const offerRepository = {
   },
 
   softDelete(id: string) {
-    return prisma.offer.update({ where: { id }, data: { isDeleted: true, active: false } });
+    return prisma.offer.update({
+      where: { id },
+      data: { isDeleted: true, active: false },
+    });
   },
 
   incrementUsage(id: string) {
-    return prisma.offer.update({ where: { id }, data: { usageCount: { increment: 1 } } });
+    return prisma.offer.update({
+      where: { id },
+      data: { usageCount: { increment: 1 } },
+    });
   },
 
   createOrderDiscount(data: {
@@ -63,7 +69,16 @@ export const offerRepository = {
   findOrderDiscounts(orderId: string) {
     return prisma.orderDiscount.findMany({
       where: { orderId },
-      include: { offer: { select: { name: true, type: true, discountType: true, discountValue: true } } },
+      include: {
+        offer: {
+          select: {
+            name: true,
+            type: true,
+            discountType: true,
+            discountValue: true,
+          },
+        },
+      },
     });
   },
 

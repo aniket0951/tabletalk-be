@@ -1,8 +1,15 @@
 import { prisma } from "../lib/prisma";
-import { orderListSelect, orderDetailSelect, orderDetailInclude } from "../lib/order-select";
+import {
+  orderListSelect,
+  orderDetailSelect,
+  orderDetailInclude,
+} from "../lib/order-select";
 import { ORDER_STATUS } from "../lib/constants";
 
-export function findMany(where: Record<string, unknown>, options?: { skip?: number; take?: number }) {
+export function findMany(
+  where: Record<string, unknown>,
+  options?: { skip?: number; take?: number },
+) {
   return prisma.order.findMany({
     where,
     select: orderListSelect,
@@ -19,11 +26,23 @@ export function count(where: Record<string, unknown>) {
 export function countByStatus(baseWhere: Record<string, unknown>) {
   return Promise.all([
     prisma.order.count({ where: { ...baseWhere, status: ORDER_STATUS.NEW } }),
-    prisma.order.count({ where: { ...baseWhere, status: ORDER_STATUS.COOKING } }),
+    prisma.order.count({
+      where: { ...baseWhere, status: ORDER_STATUS.COOKING },
+    }),
     prisma.order.count({ where: { ...baseWhere, status: ORDER_STATUS.READY } }),
-    prisma.order.count({ where: { ...baseWhere, status: ORDER_STATUS.BILLED } }),
-    prisma.order.count({ where: { ...baseWhere, status: ORDER_STATUS.SETTLED } }),
-  ]).then(([NEW, COOKING, READY, BILLED, SETTLED]) => ({ NEW, COOKING, READY, BILLED, SETTLED }));
+    prisma.order.count({
+      where: { ...baseWhere, status: ORDER_STATUS.BILLED },
+    }),
+    prisma.order.count({
+      where: { ...baseWhere, status: ORDER_STATUS.SETTLED },
+    }),
+  ]).then(([NEW, COOKING, READY, BILLED, SETTLED]) => ({
+    NEW,
+    COOKING,
+    READY,
+    BILLED,
+    SETTLED,
+  }));
 }
 
 export function findById(id: string) {
@@ -117,7 +136,10 @@ export function findLastByRestaurant(restaurantId: string) {
   });
 }
 
-export function countOtherActiveOnTable(tableId: string, excludeOrderId: string) {
+export function countOtherActiveOnTable(
+  tableId: string,
+  excludeOrderId: string,
+) {
   return prisma.order.count({
     where: {
       tableId,
@@ -145,7 +167,11 @@ const staffOrderSelect = {
   },
 } as const;
 
-export function findStaffOrders(restaurantId: string, staffId: string, dateFilter: Record<string, Date>) {
+export function findStaffOrders(
+  restaurantId: string,
+  staffId: string,
+  dateFilter: Record<string, Date>,
+) {
   return prisma.order.findMany({
     where: {
       restaurantId,
@@ -157,7 +183,10 @@ export function findStaffOrders(restaurantId: string, staffId: string, dateFilte
   });
 }
 
-export function updateWithBroadcastInclude(id: string, data: Record<string, unknown>) {
+export function updateWithBroadcastInclude(
+  id: string,
+  data: Record<string, unknown>,
+) {
   return prisma.order.update({
     where: { id },
     data,
@@ -183,13 +212,22 @@ export function findByIdWithItems(id: string) {
   });
 }
 
-export function addItems(orderId: string, items: { menuItemId: string; quantity: number; unitPrice: number }[]) {
+export function addItems(
+  orderId: string,
+  items: { menuItemId: string; quantity: number; unitPrice: number }[],
+) {
   return prisma.orderItem.createMany({
     data: items.map((item) => ({ orderId, ...item })),
   });
 }
 
-export function updateTotals(orderId: string, subtotal: number, tax: number, total: number, discount?: number) {
+export function updateTotals(
+  orderId: string,
+  subtotal: number,
+  tax: number,
+  total: number,
+  discount?: number,
+) {
   const data: Record<string, number> = { subtotal, tax, total };
   if (discount !== undefined) data.discount = discount;
   return prisma.order.update({

@@ -1,11 +1,11 @@
 import { createMiddleware } from "hono/factory";
 import { verifyOwnerToken } from "../lib/jwt";
-import { CTX } from "../lib/constants";
+import { CTX, RequestHeaders } from "../lib/constants";
 import { authError } from "../lib/response";
 import type { Env } from "../types";
 
 export const ownerAuth = createMiddleware<Env>(async (c, next) => {
-  const authHeader = c.req.header("Authorization");
+  const authHeader = c.req.header(RequestHeaders.Authorization);
   if (!authHeader?.startsWith("Bearer ")) {
     return authError(c);
   }

@@ -1,5 +1,6 @@
 import type { Context, Next } from "hono";
 import { validationError } from "../lib/response";
+import { RequestHeaders } from "../lib/constants";
 
 interface RateLimitEntry {
   count: number;
@@ -9,12 +10,15 @@ interface RateLimitEntry {
 const store = new Map<string, RateLimitEntry>();
 
 // Clean up expired entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of store) {
-    if (now > entry.resetAt) store.delete(key);
-  }
-}, 5 * 60 * 1000);
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [key, entry] of store) {
+      if (now > entry.resetAt) store.delete(key);
+    }
+  },
+  5 * 60 * 1000,
+);
 
 /**
  * In-memory rate limiter middleware.
@@ -24,8 +28,8 @@ setInterval(() => {
 export function rateLimit(maxRequests: number, windowMs: number) {
   return async (c: Context, next: Next) => {
     const ip =
-      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
-      c.req.header("x-real-ip") ||
+      c.req.header(RequestHeaders.XForwardedFor)?.split(",")[0]?.trim() ||
+      c.req.header(RequestHeaders.XRealIP) ||
       "unknown";
 
     const key = `${ip}:${c.req.path}`;

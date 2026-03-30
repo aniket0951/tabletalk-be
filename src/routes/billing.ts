@@ -24,18 +24,21 @@ protectedRoutes.get("/subscription", async (c) => {
 
     const subscription = await subscriptionRepository.findLatest(restaurantId);
     if (!subscription) return validationError(c, "No subscription");
-
     const daysRemaining = subscription.endDate
       ? Math.max(
           0,
           Math.ceil(
             (new Date(subscription.endDate).getTime() - Date.now()) /
-              (1000 * 60 * 60 * 24)
-          )
+              (1000 * 60 * 60 * 24),
+          ),
         )
       : null;
 
-    return success(c, { ...subscription, daysRemaining }, "Subscription fetched");
+    return success(
+      c,
+      { ...subscription, daysRemaining },
+      "Subscription fetched",
+    );
   } catch (err) {
     logger.error("GET /billing/subscription", err);
     return serverError(c, err instanceof Error ? err.message : undefined);
@@ -47,7 +50,10 @@ protectedRoutes.post("/subscription", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const { plan } = await c.req.json();
-    const subscription = await billingService.createTrialSubscription(restaurantId, plan);
+    const subscription = await billingService.createTrialSubscription(
+      restaurantId,
+      plan,
+    );
     return success(c, subscription, "Trial started");
   } catch (err) {
     if (err instanceof BillingError) return validationError(c, err.message);
@@ -61,7 +67,11 @@ protectedRoutes.post("/checkout", async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const { plan } = await c.req.json();
-    const result = await billingService.createCheckout(restaurantId, c.get(CTX.USER_ID), plan);
+    const result = await billingService.createCheckout(
+      restaurantId,
+      c.get(CTX.USER_ID),
+      plan,
+    );
     return success(c, result, "Checkout created");
   } catch (err: any) {
     if (err instanceof BillingError) return validationError(c, err.message);
