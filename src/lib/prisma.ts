@@ -6,6 +6,6 @@ const dbUrl = process.env.DATABASE_URL;
 
 const options = dbUrl ? { datasources: { db: { url: dbUrl } } } : undefined;
 
-export const prisma = globalForPrisma.prisma || new PrismaClient(options);
+export const prisma = globalForPrisma.prisma ?? new PrismaClient(options);
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+globalForPrisma.prisma = prisma;
