@@ -95,6 +95,9 @@ const PORT = parseInt(process.env.PORT || "3004", 10);
 
 const server = serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" }, (info) => {
   console.log(`[api] Hono server running on http://0.0.0.0:${info.port}`);
+  console.log("[env] DATABASE_URL =", process.env.DATABASE_URL ?? "NOT SET");
+  console.log("[env] FRONTEND_URL =", process.env.FRONTEND_URL ?? "NOT SET");
+  console.log("[env] NODE_ENV =", process.env.NODE_ENV ?? "NOT SET");
 });
 
 // Attach Socket.IO to the same HTTP server
