@@ -19,7 +19,8 @@ export class BillingError extends Error {
 }
 
 export async function createTrialSubscription(restaurantId: string, plan: string) {
-  if (!VALID_PLANS.includes(plan as never)) {
+  const normalizedPlan = plan.toUpperCase();
+  if (!VALID_PLANS.includes(normalizedPlan as never)) {
     throw new BillingError("Invalid plan", 400);
   }
 
@@ -32,7 +33,7 @@ export async function createTrialSubscription(restaurantId: string, plan: string
   endDate.setDate(endDate.getDate() + 14);
 
   return subscriptionRepository.create({
-    plan: plan as never,
+    plan: normalizedPlan as never,
     status: SUBSCRIPTION_STATUS.TRIAL,
     startDate: new Date(),
     endDate,
@@ -41,7 +42,8 @@ export async function createTrialSubscription(restaurantId: string, plan: string
 }
 
 export async function createCheckout(restaurantId: string, userId: string, plan: string) {
-  if (!VALID_PLANS.includes(plan as never)) {
+  const normalizedPlan = plan.toUpperCase();
+  if (!VALID_PLANS.includes(normalizedPlan as never)) {
     throw new BillingError("Invalid plan", 400);
   }
 
@@ -62,20 +64,20 @@ export async function createCheckout(restaurantId: string, userId: string, plan:
   });
   if (!restaurant) throw new BillingError("No restaurant", 404);
 
-  const amount = PLAN_PRICES[plan as keyof typeof PLAN_PRICES];
+  const amount = PLAN_PRICES[normalizedPlan as keyof typeof PLAN_PRICES];
 
   const rzpOrder = await getRazorpay().orders.create({
     amount,
     currency: "INR",
     receipt: `rcpt_${Date.now()}`,
-    notes: { restaurant_id: restaurantId, user_id: userId, plan },
+    notes: { restaurant_id: restaurantId, user_id: userId, plan: normalizedPlan },
   });
 
   const endDate = new Date();
   endDate.setDate(endDate.getDate() + 30);
 
   const subscription = await subscriptionRepository.create({
-    plan: plan as never,
+    plan: normalizedPlan as never,
     status: SUBSCRIPTION_STATUS.PENDING,
     startDate: new Date(),
     endDate,
