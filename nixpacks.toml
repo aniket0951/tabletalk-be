@@ -1,0 +1,13 @@
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm ci"]
+cacheDirectories = ["node_modules"]
+
+[phases.build]
+cmds = ["npx prisma generate", "npx tsc"]
+cacheDirectories = ["node_modules/.prisma"]
+
+[start]
+cmd = "npx prisma db push && node dist/index.js"

@@ -1,5 +1,7 @@
 [build]
-buildCommand = "npm ci && npx prisma generate && npx prisma db push && npx tsc"
+# buildCommand = "npm ci && npx prisma generate && npx prisma db push && npx tsc"
+buildCommand = "npm install && npx prisma generate"
 
 [deploy]
-startCommand = "printenv > .env && node dist/index.js"
+# startCommand = "printenv > .env && node dist/index.js"
+startCommand = "npx prisma db push && npx tsx src/index.ts"
