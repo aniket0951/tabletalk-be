@@ -20,6 +20,7 @@ protectedRoutes.use("*", ownerAuth, requireRestaurant);
 // GET /billing/subscription — get current subscription
 protectedRoutes.get("/subscription", async (c) => {
   try {
+    logger.info("billing", "DB_URL in use: " + (process.env.DATABASE_URL ?? "NOT SET"));
     const restaurantId = c.get(CTX.RESTAURANT_ID);
 
     const subscription = await subscriptionRepository.findLatest(restaurantId);

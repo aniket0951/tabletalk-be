@@ -91,63 +91,76 @@ app.route("/public", publicRoutes);
 app.route("/campaigns", campaignRoutes);
 app.route("/offers", offerRoutes);
 
-const PORT = parseInt(process.env.PORT || "3004", 10);
-
-const server = serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" }, (info) => {
-  console.log(`[api] Hono server running on http://0.0.0.0:${info.port}`);
-  console.log("[env] DATABASE_URL =", process.env.DATABASE_URL ?? "NOT SET");
-  console.log("[env] FRONTEND_URL =", process.env.FRONTEND_URL ?? "NOT SET");
-  console.log("[env] NODE_ENV =", process.env.NODE_ENV ?? "NOT SET");
-});
-
-// Attach Socket.IO to the same HTTP server
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
-});
-
-setIO(io);
-
-// Socket auth middleware — verify token if provided, allow anonymous for customer order tracking
-io.use(async (socket, next) => {
-  const token = socket.handshake.auth?.token as string | undefined;
-  if (token) {
-    const payload = await verifyOwnerToken(token);
-    if (payload) {
-      socket.data.userId = payload.userId;
-      socket.data.role = "owner";
-    } else {
-      // Could be a staff token — still valid JWT, just different payload
-      try {
-        const { jwtVerify } = await import("jose");
-        const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
-        const { payload: staffPayload } = await jwtVerify(token, secret);
-        if (staffPayload.staffId) {
-          socket.data.staffId = staffPayload.staffId;
-          socket.data.role = "staff";
-        }
-      } catch {
-        // Invalid token — allow as anonymous (customer)
-      }
-    }
-  }
-  // Allow all connections (customers need socket for order tracking)
-  // but tag unauthenticated ones as "customer"
-  if (!socket.data.role) socket.data.role = "customer";
-  next();
-});
-
-io.on("connection", (socket) => {
-  socket.on("disconnect", () => {
-  });
-});
-
-// Keep-alive cron: ping DB every 5 minutes to prevent Supabase cold starts
-setInterval(async () => {
+async function bootstrap() {
+  // ── DB connectivity check ─────────────────────────────────
   try {
     await prisma.$queryRaw`SELECT 1`;
-  } catch {
+    console.log("[db] Connection OK");
+  } catch (err) {
+    console.error("[db] Connection failed — aborting startup:", err);
+    process.exit(1);
   }
-}, 5 * 60 * 1000);
+
+  const PORT = parseInt(process.env.PORT || "3004", 10);
+
+  const server = serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" }, (info) => {
+    console.log(`[api] Hono server running on http://0.0.0.0:${info.port}`);
+    console.log("[env] DATABASE_URL =", process.env.DATABASE_URL ?? "NOT SET");
+    console.log("[env] FRONTEND_URL =", process.env.FRONTEND_URL ?? "NOT SET");
+    console.log("[env] NODE_ENV =", process.env.NODE_ENV ?? "NOT SET");
+  });
+
+  // Attach Socket.IO to the same HTTP server
+  const io = new Server(server, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"],
+    },
+  });
+
+  setIO(io);
+
+  // Socket auth middleware — verify token if provided, allow anonymous for customer order tracking
+  io.use(async (socket, next) => {
+    const token = socket.handshake.auth?.token as string | undefined;
+    if (token) {
+      const payload = await verifyOwnerToken(token);
+      if (payload) {
+        socket.data.userId = payload.userId;
+        socket.data.role = "owner";
+      } else {
+        // Could be a staff token — still valid JWT, just different payload
+        try {
+          const { jwtVerify } = await import("jose");
+          const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
+          const { payload: staffPayload } = await jwtVerify(token, secret);
+          if (staffPayload.staffId) {
+            socket.data.staffId = staffPayload.staffId;
+            socket.data.role = "staff";
+          }
+        } catch {
+          // Invalid token — allow as anonymous (customer)
+        }
+      }
+    }
+    // Allow all connections (customers need socket for order tracking)
+    // but tag unauthenticated ones as "customer"
+    if (!socket.data.role) socket.data.role = "customer";
+    next();
+  });
+
+  io.on("connection", (socket) => {
+    socket.on("disconnect", () => {
+    });
+  });
+
+  // Keep-alive cron: ping DB every 5 minutes to prevent Supabase cold starts
+  setInterval(async () => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+    }
+  }, 5 * 60 * 1000);
+}
+
+bootstrap();

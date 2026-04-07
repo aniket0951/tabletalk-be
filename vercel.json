@@ -1,0 +1,8 @@
+{
+  "experimentalServices": {
+    "web": {
+      "routePrefix": "/",
+      "buildCommand": "npm install && npx prisma generate"
+    }
+  }
+}
