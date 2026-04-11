@@ -23,6 +23,7 @@ services:
       - "3004:3004"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/tabletalk?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@db:5432/tabletalk?schema=public
       JWT_SECRET: "tq8IFIbzlqzBn/0wJdCRk9xtIxi2+oiAZLBlFxmEaa2mIOa5v0w3TqE4a+604qhh"
       FRONTEND_URL: http://localhost:3000
       PORT: 3004
