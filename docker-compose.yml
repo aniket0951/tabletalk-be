@@ -1,38 +1,15 @@
 services:
-  db:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: tabletalk
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   api:
     image: aniketsuryawanshi/tabletalk-be:latest
     restart: unless-stopped
     ports:
       - "3004:3004"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/tabletalk?schema=public
-      DIRECT_URL: postgresql://postgres:postgres@db:5432/tabletalk?schema=public
-      JWT_SECRET: "tq8IFIbzlqzBn/0wJdCRk9xtIxi2+oiAZLBlFxmEaa2mIOa5v0w3TqE4a+604qhh"
-      FRONTEND_URL: http://localhost:3000
+      DATABASE_URL: ${DATABASE_URL}
+      DIRECT_URL: ${DIRECT_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       PORT: 3004
       NODE_ENV: production
-    depends_on:
-      db:
-        condition: service_healthy
     command: >
       sh -c "npx prisma migrate deploy && node dist/index.js"
-
-volumes:
-  postgres_data:
