@@ -117,23 +117,21 @@ jobs:
       name: production
 
     steps:
-      - name: Setup SSH key
+      - name: Setup SSH agent
         env:
           SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
+          eval $(ssh-agent -s)
+          echo "$SSH_KEY" | tr -d '\r' | ssh-add -
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> $GITHUB_ENV
           mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
       - name: SSH and deploy
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
-            cd /opt/tabletalk
-            docker compose pull api
-            docker compose up -d --force-recreate api
-            docker image prune -f
-          EOF
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "cd /opt/tabletalk && docker compose pull api && docker compose up -d --force-recreate api && docker image prune -f"
 
       - name: Deployment Summary
         run: |
