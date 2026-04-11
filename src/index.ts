@@ -52,7 +52,7 @@ app.use(
     credentials: false,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-  })
+  }),
 );
 
 app.get("/health", async (c) => {
@@ -60,7 +60,7 @@ app.get("/health", async (c) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
   } catch {}
-  return success(c, { status: "ok" }, "Health check passed");
+  return success(c, { status: "ok" }, "Health check passed testing");
 });
 
 // Global rate limit: 100 requests per minute per IP (owner/staff routes)
@@ -103,12 +103,21 @@ async function bootstrap() {
 
   const PORT = parseInt(process.env.PORT || "3004", 10);
 
-  const server = serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" }, (info) => {
-    console.log(`[api] Hono server running on http://0.0.0.0:${info.port}`);
-    console.log("[env] DATABASE_URL =", process.env.DATABASE_URL ?? "NOT SET");
-    console.log("[env] FRONTEND_URL =", process.env.FRONTEND_URL ?? "NOT SET");
-    console.log("[env] NODE_ENV =", process.env.NODE_ENV ?? "NOT SET");
-  });
+  const server = serve(
+    { fetch: app.fetch, port: PORT, hostname: "0.0.0.0" },
+    (info) => {
+      console.log(`[api] Hono server running on http://0.0.0.0:${info.port}`);
+      console.log(
+        "[env] DATABASE_URL =",
+        process.env.DATABASE_URL ?? "NOT SET",
+      );
+      console.log(
+        "[env] FRONTEND_URL =",
+        process.env.FRONTEND_URL ?? "NOT SET",
+      );
+      console.log("[env] NODE_ENV =", process.env.NODE_ENV ?? "NOT SET");
+    },
+  );
 
   // Attach Socket.IO to the same HTTP server
   const io = new Server(server, {
@@ -150,17 +159,18 @@ async function bootstrap() {
   });
 
   io.on("connection", (socket) => {
-    socket.on("disconnect", () => {
-    });
+    socket.on("disconnect", () => {});
   });
 
   // Keep-alive cron: ping DB every 5 minutes to prevent Supabase cold starts
-  setInterval(async () => {
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-    } catch {
-    }
-  }, 5 * 60 * 1000);
+  setInterval(
+    async () => {
+      try {
+        await prisma.$queryRaw`SELECT 1`;
+      } catch {}
+    },
+    5 * 60 * 1000,
+  );
 }
 
 bootstrap();
