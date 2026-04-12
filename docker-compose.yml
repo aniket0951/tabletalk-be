@@ -6,7 +6,6 @@ services:
       - "3004:3004"
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      DIRECT_URL: ${DIRECT_URL}
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       PORT: 3004
