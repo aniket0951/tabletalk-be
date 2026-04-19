@@ -11,7 +11,7 @@ import { success, validationError, serverError } from "../lib/response";
 
 export const offerRoutes = new Hono<Env>();
 
-offerRoutes.use("*", ownerAuth, requireRestaurant, subscriptionGuard);
+offerRoutes.use("*", ownerAuth, requireRestaurant);
 
 // GET /offers
 offerRoutes.get("/", async (c) => {
@@ -26,7 +26,7 @@ offerRoutes.get("/", async (c) => {
 });
 
 // POST /offers
-offerRoutes.post("/", async (c) => {
+offerRoutes.post("/", subscriptionGuard, async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const body = await c.req.json();
@@ -40,7 +40,8 @@ offerRoutes.post("/", async (c) => {
       type: body.type,
       discountType: body.discountType,
       discountValue: Number(body.discountValue),
-      minOrderAmount: body.minOrderAmount != null ? Number(body.minOrderAmount) : null,
+      minOrderAmount:
+        body.minOrderAmount != null ? Number(body.minOrderAmount) : null,
       maxDiscount: body.maxDiscount != null ? Number(body.maxDiscount) : null,
       menuItemIds: body.menuItemIds || [],
       categoryIds: body.categoryIds || [],
@@ -59,13 +60,17 @@ offerRoutes.post("/", async (c) => {
 });
 
 // PATCH /offers/:id
-offerRoutes.patch("/:id", async (c) => {
+offerRoutes.patch("/:id", subscriptionGuard, async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const id = c.req.param("id");
 
     const existing = await offerRepository.findById(id);
-    if (!existing || existing.restaurantId !== restaurantId || existing.isDeleted) {
+    if (
+      !existing ||
+      existing.restaurantId !== restaurantId ||
+      existing.isDeleted
+    ) {
       return validationError(c, "Offer not found");
     }
 
@@ -74,16 +79,25 @@ offerRoutes.patch("/:id", async (c) => {
 
     if (body.name !== undefined) data.name = String(body.name);
     if (body.active !== undefined) data.active = Boolean(body.active);
-    if (body.discountValue !== undefined) data.discountValue = Number(body.discountValue);
-    if (body.minOrderAmount !== undefined) data.minOrderAmount = body.minOrderAmount != null ? Number(body.minOrderAmount) : null;
-    if (body.maxDiscount !== undefined) data.maxDiscount = body.maxDiscount != null ? Number(body.maxDiscount) : null;
+    if (body.discountValue !== undefined)
+      data.discountValue = Number(body.discountValue);
+    if (body.minOrderAmount !== undefined)
+      data.minOrderAmount =
+        body.minOrderAmount != null ? Number(body.minOrderAmount) : null;
+    if (body.maxDiscount !== undefined)
+      data.maxDiscount =
+        body.maxDiscount != null ? Number(body.maxDiscount) : null;
     if (body.menuItemIds !== undefined) data.menuItemIds = body.menuItemIds;
     if (body.categoryIds !== undefined) data.categoryIds = body.categoryIds;
     if (body.daysOfWeek !== undefined) data.daysOfWeek = body.daysOfWeek;
-    if (body.startDate !== undefined) data.startDate = body.startDate ? new Date(body.startDate) : null;
-    if (body.endDate !== undefined) data.endDate = body.endDate ? new Date(body.endDate) : null;
+    if (body.startDate !== undefined)
+      data.startDate = body.startDate ? new Date(body.startDate) : null;
+    if (body.endDate !== undefined)
+      data.endDate = body.endDate ? new Date(body.endDate) : null;
     if (body.promoCode !== undefined) data.promoCode = body.promoCode || null;
-    if (body.usageLimit !== undefined) data.usageLimit = body.usageLimit != null ? Number(body.usageLimit) : null;
+    if (body.usageLimit !== undefined)
+      data.usageLimit =
+        body.usageLimit != null ? Number(body.usageLimit) : null;
 
     const offer = await offerRepository.update(id, data);
     return success(c, offer, "Offer updated");
@@ -124,10 +138,14 @@ offerRoutes.get("/:id/stats", async (c) => {
     }
 
     const stats = await offerRepository.getStats(id);
-    return success(c, {
-      redemptions: stats._count,
-      totalDiscountGiven: stats._sum.discountAmount || 0,
-    }, "Offer stats fetched");
+    return success(
+      c,
+      {
+        redemptions: stats._count,
+        totalDiscountGiven: stats._sum.discountAmount || 0,
+      },
+      "Offer stats fetched",
+    );
   } catch (err) {
     logger.error("GET /offers/:id/stats", err);
     return serverError(c, err instanceof Error ? err.message : undefined);

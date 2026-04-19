@@ -11,7 +11,7 @@ import { success, validationError, serverError } from "../lib/response";
 
 export const menuRoutes = new Hono<Env>();
 
-menuRoutes.use("*", ownerAuth, requireRestaurant, subscriptionGuard);
+menuRoutes.use("*", ownerAuth, requireRestaurant);
 
 // GET /menu/categories — categories only with item count (for tab view)
 menuRoutes.get("/categories", async (c) => {
@@ -30,14 +30,25 @@ menuRoutes.get("/categories/:categoryId/items", async (c) => {
   try {
     const categoryId = c.req.param("categoryId");
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
-    const limit = Math.min(50, Math.max(1, parseInt(c.req.query("limit") || "20", 10)));
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(c.req.query("limit") || "20", 10)),
+    );
 
-    const items = await menuRepository.findItemsByCategory(categoryId, page, limit);
+    const items = await menuRepository.findItemsByCategory(
+      categoryId,
+      page,
+      limit,
+    );
 
     const hasMore = items.length > limit;
     if (hasMore) items.pop();
 
-    return success(c, { items, pagination: { page, limit, hasMore } }, "Items fetched");
+    return success(
+      c,
+      { items, pagination: { page, limit, hasMore } },
+      "Items fetched",
+    );
   } catch (err) {
     logger.error("GET /menu/categories/:categoryId/items", err);
     return serverError(c, err instanceof Error ? err.message : undefined);
@@ -57,7 +68,7 @@ menuRoutes.get("/items", async (c) => {
 });
 
 // POST /menu/items
-menuRoutes.post("/items", async (c) => {
+menuRoutes.post("/items", subscriptionGuard, async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const body = await c.req.json();
@@ -115,11 +126,15 @@ menuRoutes.delete("/items/:id", async (c) => {
 });
 
 // POST /menu/categories
-menuRoutes.post("/categories", async (c) => {
+menuRoutes.post("/categories", subscriptionGuard, async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
     const { name, emoji } = await c.req.json();
-    const category = await menuService.createCategory(restaurantId, name, emoji);
+    const category = await menuService.createCategory(
+      restaurantId,
+      name,
+      emoji,
+    );
     return success(c, category, "Category created");
   } catch (err) {
     if (err instanceof MenuError) return validationError(c, err.message);

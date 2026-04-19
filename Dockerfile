@@ -23,7 +23,10 @@ ENV NODE_ENV=production
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts \
+    && npm cache clean --force \
+    && find node_modules -type f \( -name "*.md" -o -name "*.markdown" -o -name "LICENSE*" -o -name "CHANGELOG*" -o -name "*.map" -o -name "*.ts" ! -name "*.d.ts" \) -delete \
+    && find node_modules -type d \( -name "test" -o -name "tests" -o -name "__tests__" -o -name "docs" -o -name ".github" -o -name "examples" \) -prune -exec rm -rf {} +
 
 # Copy compiled output and generated Prisma client
 COPY --from=builder /app/dist ./dist

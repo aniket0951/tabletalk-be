@@ -5,7 +5,11 @@ import { emitSocketEvent } from "../lib/socket";
 import { requireRestaurant } from "../middleware/require-restaurant";
 import { CTX, ORDER_STATUS, SOCKET_EVENT } from "../lib/constants";
 import { orderRepository } from "../repositories/order.repository";
-import { orderService, OrderError, validateStatusTransition } from "../services/order.service";
+import {
+  orderService,
+  OrderError,
+  validateStatusTransition,
+} from "../services/order.service";
 
 import type { Env } from "../types";
 import { logger } from "../lib/logger";
@@ -13,7 +17,7 @@ import { success, validationError, serverError } from "../lib/response";
 
 export const ordersRoutes = new Hono<Env>();
 
-ordersRoutes.use("*", ownerAuth, requireRestaurant, subscriptionGuard);
+ordersRoutes.use("*", ownerAuth, requireRestaurant);
 
 // GET /orders
 ordersRoutes.get("/", async (c) => {
@@ -40,7 +44,11 @@ ordersRoutes.get("/", async (c) => {
         ? {
             OR: [
               { orderCode: { contains: search, mode: "insensitive" as const } },
-              { table: { label: { contains: search, mode: "insensitive" as const } } },
+              {
+                table: {
+                  label: { contains: search, mode: "insensitive" as const },
+                },
+              },
             ],
           }
         : {}),
@@ -49,22 +57,37 @@ ordersRoutes.get("/", async (c) => {
     const page = Math.max(1, parseInt(pageParam || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(limitParam || "20", 10)));
 
-    const filteredWhere = { ...baseWhere, ...(status && status !== "ALL" ? { status: status as never } : {}) };
+    const filteredWhere = {
+      ...baseWhere,
+      ...(status && status !== "ALL" ? { status: status as never } : {}),
+    };
 
     const [orders, totalFiltered, statusCounts] = await Promise.all([
-      orderRepository.findMany(filteredWhere, { skip: (page - 1) * limit, take: limit }),
+      orderRepository.findMany(filteredWhere, {
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
       orderRepository.count(filteredWhere),
       orderRepository.countByStatus(baseWhere),
     ]);
 
     const totalAll = Object.values(statusCounts).reduce((a, b) => a + b, 0);
 
-    return success(c, {
-      orders,
-      statusCounts,
-      totalAll,
-      pagination: { page, limit, totalFiltered, totalPages: Math.ceil(totalFiltered / limit) },
-    }, "Orders fetched");
+    return success(
+      c,
+      {
+        orders,
+        statusCounts,
+        totalAll,
+        pagination: {
+          page,
+          limit,
+          totalFiltered,
+          totalPages: Math.ceil(totalFiltered / limit),
+        },
+      },
+      "Orders fetched",
+    );
   } catch (err) {
     logger.error("GET /orders", err);
     return serverError(c, err instanceof Error ? err.message : undefined);
@@ -105,11 +128,17 @@ ordersRoutes.patch("/:id", async (c) => {
     const updateData: Record<string, unknown> = {};
 
     if (body.status) {
-      const transitionError = validateStatusTransition(existing.status, body.status);
+      const transitionError = validateStatusTransition(
+        existing.status,
+        body.status,
+      );
       if (transitionError) {
         return validationError(c, transitionError);
       }
-      Object.assign(updateData, orderService.buildStatusUpdateData(body.status, existing));
+      Object.assign(
+        updateData,
+        orderService.buildStatusUpdateData(body.status, existing),
+      );
     }
 
     if (body.staffId !== undefined) {

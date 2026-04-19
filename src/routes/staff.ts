@@ -12,7 +12,7 @@ import { success, validationError, serverError } from "../lib/response";
 
 export const staffRoutes = new Hono<Env>();
 
-staffRoutes.use("*", ownerAuth, requireRestaurant, subscriptionGuard);
+staffRoutes.use("*", ownerAuth, requireRestaurant);
 
 // GET /staff
 staffRoutes.get("/", async (c) => {
@@ -27,7 +27,7 @@ staffRoutes.get("/", async (c) => {
 });
 
 // POST /staff
-staffRoutes.post("/", async (c) => {
+staffRoutes.post("/", subscriptionGuard, async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
 
