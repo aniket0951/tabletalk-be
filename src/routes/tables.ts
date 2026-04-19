@@ -11,7 +11,7 @@ import { success, validationError, serverError } from "../lib/response";
 
 export const tablesRoutes = new Hono<Env>();
 
-tablesRoutes.use("*", ownerAuth, requireRestaurant, subscriptionGuard);
+tablesRoutes.use("*", ownerAuth, requireRestaurant);
 
 // GET /tables
 tablesRoutes.get("/", async (c) => {
@@ -26,7 +26,7 @@ tablesRoutes.get("/", async (c) => {
 });
 
 // POST /tables
-tablesRoutes.post("/", async (c) => {
+tablesRoutes.post("/", subscriptionGuard, async (c) => {
   try {
     const restaurantId = c.get(CTX.RESTAURANT_ID);
 
