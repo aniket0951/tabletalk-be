@@ -32,6 +32,18 @@ authRoutes.post("/login", rateLimit(10, 15 * 60 * 1000), async (c) => {
   }
 });
 
+// POST /auth/google
+authRoutes.post("/google", rateLimit(10, 15 * 60 * 1000), async (c) => {
+  try {
+    const { accessToken } = await c.req.json();
+    const result = await authService.googleLogin(accessToken);
+    return success(c, result, "Logged in with Google");
+  } catch (err) {
+    if (err instanceof AuthError) return validationError(c, err.message);
+    return serverError(c, err instanceof Error ? err.message : undefined);
+  }
+});
+
 // GET /auth/me
 authRoutes.get("/me", ownerAuth, async (c) => {
   try {

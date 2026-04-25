@@ -8,10 +8,27 @@ import { menuRepository } from "../repositories/menu.repository";
 import { ratingRepository } from "../repositories/rating.repository";
 import { orderService, OrderError } from "../services/order.service";
 import { offerRepository } from "../repositories/offer.repository";
+import { offerService } from "../services/offer.service";
 import { logger } from "../lib/logger";
 import { success, validationError, serverError } from "../lib/response";
+import { STATES, CITIES_BY_STATE } from "../data/india-locations";
+
+
 
 export const publicRoutes = new Hono();
+
+// GET /public/states
+publicRoutes.get("/states", (c) => {
+  return success(c, STATES, "States fetched");
+});
+
+// GET /public/states/:code/cities
+publicRoutes.get("/states/:code/cities", (c) => {
+  const code = c.req.param("code").toUpperCase();
+  const cities = CITIES_BY_STATE[code];
+  if (!cities) return validationError(c, "Invalid state code");
+  return success(c, cities, "Cities fetched");
+});
 
 // GET /public/table/:tableId — table info + restaurant name
 publicRoutes.get("/table/:tableId", async (c) => {
@@ -24,13 +41,17 @@ publicRoutes.get("/table/:tableId", async (c) => {
       return validationError(c, "Table not found");
     }
 
-    return success(c, {
-      id: table.id,
-      tableNumber: table.tableNumber,
-      label: table.label,
-      capacity: table.capacity,
-      restaurant: table.restaurant,
-    }, "Table fetched");
+    return success(
+      c,
+      {
+        id: table.id,
+        tableNumber: table.tableNumber,
+        label: table.label,
+        capacity: table.capacity,
+        restaurant: table.restaurant,
+      },
+      "Table fetched",
+    );
   } catch (err) {
     logger.error("GET /public/table/:tableId", err);
     return serverError(c, err instanceof Error ? err.message : undefined);
@@ -55,13 +76,23 @@ publicRoutes.get("/menu/:restaurantId/category/:categoryId", async (c) => {
     const restaurantId = c.req.param("restaurantId");
     const categoryId = c.req.param("categoryId");
 
-    const category = await menuRepository.findCategoryByIdAndRestaurant(categoryId, restaurantId);
+    const category = await menuRepository.findCategoryByIdAndRestaurant(
+      categoryId,
+      restaurantId,
+    );
     if (!category) return validationError(c, "Category not found");
 
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query("limit") || "50", 10)));
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(c.req.query("limit") || "50", 10)),
+    );
 
-    const items = await menuRepository.findAvailableItems(categoryId, page, limit);
+    const items = await menuRepository.findAvailableItems(
+      categoryId,
+      page,
+      limit,
+    );
 
     return success(c, items, "Menu items fetched");
   } catch (err) {
@@ -99,11 +130,42 @@ publicRoutes.get("/offers/:restaurantId", async (c) => {
   }
 });
 
+// POST /public/validate-promo — validate a promo code before order placement
+publicRoutes.post("/validate-promo", rateLimit(20, 60 * 1000), async (c) => {
+  try {
+    const { restaurantId, promoCode, subtotal } = await c.req.json();
+
+    if (!restaurantId || typeof restaurantId !== "string") {
+      return validationError(c, "restaurantId is required");
+    }
+    if (!promoCode || typeof promoCode !== "string" || !promoCode.trim()) {
+      return validationError(c, "promoCode is required");
+    }
+    if (typeof subtotal !== "number" || subtotal < 0) {
+      return validationError(c, "subtotal must be a non-negative number");
+    }
+
+    const offers = await offerRepository.findActive(restaurantId);
+    const result = offerService.validatePromoCode(offers, subtotal, promoCode.trim());
+
+    return success(c, result, result.valid ? "Promo code valid" : "Promo code invalid");
+  } catch (err) {
+    logger.error("POST /public/validate-promo", err);
+    return serverError(c, err instanceof Error ? err.message : undefined);
+  }
+});
+
 // POST /public/orders — create order from customer
 publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
   try {
-    const { tableId, customerPhone, customerName, specialNote, promoCode, items } =
-      await c.req.json();
+    const {
+      tableId,
+      customerPhone,
+      customerName,
+      specialNote,
+      promoCode,
+      items,
+    } = await c.req.json();
 
     if (!tableId || !items?.length) {
       return validationError(c, "tableId and items are required");
@@ -114,7 +176,9 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
     }
 
     // Validate phone: exactly 10 digits (Indian mobile), optional +91 prefix
-    const cleanPhone = String(customerPhone).replace(/[\s\-()]/g, "").replace(/^\+91/, "");
+    const cleanPhone = String(customerPhone)
+      .replace(/[\s\-()]/g, "")
+      .replace(/^\+91/, "");
     if (!/^\d{10}$/.test(cleanPhone)) {
       return validationError(c, "Phone number must be exactly 10 digits");
     }
@@ -164,53 +228,59 @@ publicRoutes.post("/orders", rateLimit(10, 5 * 60 * 1000), async (c) => {
 });
 
 // PATCH /public/orders/:orderId/items — add items to an existing order
-publicRoutes.patch("/orders/:orderId/items", rateLimit(10, 5 * 60 * 1000), async (c) => {
-  try {
-    const orderId = c.req.param("orderId") as string;
-    const { customerPhone, items } = await c.req.json();
+publicRoutes.patch(
+  "/orders/:orderId/items",
+  rateLimit(10, 5 * 60 * 1000),
+  async (c) => {
+    try {
+      const orderId = c.req.param("orderId") as string;
+      const { customerPhone, items } = await c.req.json();
 
-    if (!customerPhone?.trim()) {
-      return validationError(c, "Phone number is required");
-    }
-
-    const cleanPhone = String(customerPhone).replace(/[\s\-()]/g, "").replace(/^\+91/, "");
-    if (!/^\d{10}$/.test(cleanPhone)) {
-      return validationError(c, "Phone number must be exactly 10 digits");
-    }
-
-    if (!Array.isArray(items) || items.length === 0) {
-      return validationError(c, "Items array is required");
-    }
-
-    if (items.length > 50) {
-      return validationError(c, "Too many items (max 50 per request)");
-    }
-
-    for (const item of items) {
-      if (!item.menuItemId || typeof item.menuItemId !== "string") {
-        return validationError(c, "Each item must have a valid menuItemId");
+      if (!customerPhone?.trim()) {
+        return validationError(c, "Phone number is required");
       }
-      const qty = Number(item.quantity);
-      if (!Number.isInteger(qty) || qty < 1 || qty > 99) {
-        return validationError(c, "Item quantity must be between 1 and 99");
+
+      const cleanPhone = String(customerPhone)
+        .replace(/[\s\-()]/g, "")
+        .replace(/^\+91/, "");
+      if (!/^\d{10}$/.test(cleanPhone)) {
+        return validationError(c, "Phone number must be exactly 10 digits");
       }
-    }
 
-    const order = await orderService.addItems({
-      orderId,
-      customerPhone: cleanPhone,
-      items,
-    });
+      if (!Array.isArray(items) || items.length === 0) {
+        return validationError(c, "Items array is required");
+      }
 
-    return success(c, order, "Items added to order");
-  } catch (err) {
-    if (err instanceof OrderError) {
-      return validationError(c, err.message, err.code);
+      if (items.length > 50) {
+        return validationError(c, "Too many items (max 50 per request)");
+      }
+
+      for (const item of items) {
+        if (!item.menuItemId || typeof item.menuItemId !== "string") {
+          return validationError(c, "Each item must have a valid menuItemId");
+        }
+        const qty = Number(item.quantity);
+        if (!Number.isInteger(qty) || qty < 1 || qty > 99) {
+          return validationError(c, "Item quantity must be between 1 and 99");
+        }
+      }
+
+      const order = await orderService.addItems({
+        orderId,
+        customerPhone: cleanPhone,
+        items,
+      });
+
+      return success(c, order, "Items added to order");
+    } catch (err) {
+      if (err instanceof OrderError) {
+        return validationError(c, err.message, err.code);
+      }
+      logger.error("PATCH /public/orders/:orderId/items", err);
+      return serverError(c, err instanceof Error ? err.message : undefined);
     }
-    logger.error("PATCH /public/orders/:orderId/items", err);
-    return serverError(c, err instanceof Error ? err.message : undefined);
-  }
-});
+  },
+);
 
 // GET /public/orders/active/:tableId — active (non-SETTLED) order on this table
 publicRoutes.get("/orders/active/:tableId", async (c) => {
@@ -249,14 +319,30 @@ publicRoutes.get("/orders/history/:phone", async (c) => {
     if (!phone) return validationError(c, "Phone is required");
 
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
-    const limit = Math.min(50, Math.max(1, parseInt(c.req.query("limit") || "20", 10)));
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(c.req.query("limit") || "20", 10)),
+    );
 
-    const [orders, total] = await orderRepository.findHistory(phone, page, limit);
+    const [orders, total] = await orderRepository.findHistory(
+      phone,
+      page,
+      limit,
+    );
 
-    return success(c, {
-      orders,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    }, "Order history fetched");
+    return success(
+      c,
+      {
+        orders,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+      "Order history fetched",
+    );
   } catch (err) {
     logger.error("GET /public/orders/history/:phone", err);
     return serverError(c, err instanceof Error ? err.message : undefined);
@@ -294,7 +380,10 @@ publicRoutes.post("/ratings", async (c) => {
       return validationError(c, "Order not found");
     }
 
-    if (order.status !== ORDER_STATUS.BILLED && order.status !== ORDER_STATUS.SETTLED) {
+    if (
+      order.status !== ORDER_STATUS.BILLED &&
+      order.status !== ORDER_STATUS.SETTLED
+    ) {
       return validationError(c, "Order must be billed or settled to rate");
     }
 
@@ -304,16 +393,31 @@ publicRoutes.post("/ratings", async (c) => {
 
     const orderMenuItemIds = new Set(order.items.map((i) => i.menuItemId));
     for (const r of ratings) {
-      if (!r.menuItemId || typeof r.rating !== "number" || r.rating < 1 || r.rating > 5) {
-        return validationError(c, "Each rating must have menuItemId and rating (1-5)");
+      if (
+        !r.menuItemId ||
+        typeof r.rating !== "number" ||
+        r.rating < 1 ||
+        r.rating > 5
+      ) {
+        return validationError(
+          c,
+          "Each rating must have menuItemId and rating (1-5)",
+        );
       }
       if (!orderMenuItemIds.has(r.menuItemId)) {
-        return validationError(c, `Item ${r.menuItemId} is not part of this order`);
+        return validationError(
+          c,
+          `Item ${r.menuItemId} is not part of this order`,
+        );
       }
     }
 
     await prisma.$transaction(async (tx) => {
-      for (const r of ratings as { menuItemId: string; rating: number; note?: string }[]) {
+      for (const r of ratings as {
+        menuItemId: string;
+        rating: number;
+        note?: string;
+      }[]) {
         await ratingRepository.createWithRecalc(
           {
             orderId,
@@ -323,10 +427,13 @@ publicRoutes.post("/ratings", async (c) => {
             rating: r.rating,
             note: r.note || "",
           },
-          tx as never
+          tx as never,
         );
 
-        const agg = await ratingRepository.aggregateByMenuItem(r.menuItemId, tx as never);
+        const agg = await ratingRepository.aggregateByMenuItem(
+          r.menuItemId,
+          tx as never,
+        );
 
         await menuRepository.updateItem(r.menuItemId, {
           averageRating: Math.round((agg._avg.rating || 0) * 10) / 10,
@@ -347,20 +454,38 @@ publicRoutes.get("/ratings/:menuItemId", async (c) => {
   try {
     const menuItemId = c.req.param("menuItemId");
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
-    const limit = Math.min(50, Math.max(1, parseInt(c.req.query("limit") || "10", 10)));
-    const starFilter = c.req.query("star") ? parseInt(c.req.query("star")!, 10) : undefined;
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(c.req.query("limit") || "10", 10)),
+    );
+    const starFilter = c.req.query("star")
+      ? parseInt(c.req.query("star")!, 10)
+      : undefined;
 
     const where: { menuItemId: string; rating?: number } = { menuItemId };
     if (starFilter && starFilter >= 1 && starFilter <= 5) {
       where.rating = starFilter;
     }
 
-    const [ratings, total] = await ratingRepository.findMany(where, page, limit);
+    const [ratings, total] = await ratingRepository.findMany(
+      where,
+      page,
+      limit,
+    );
 
-    return success(c, {
-      ratings,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    }, "Ratings fetched");
+    return success(
+      c,
+      {
+        ratings,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+      "Ratings fetched",
+    );
   } catch (err) {
     logger.error("GET /public/ratings/:menuItemId", err);
     return serverError(c, err instanceof Error ? err.message : undefined);

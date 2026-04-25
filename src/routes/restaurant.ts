@@ -7,9 +7,12 @@ import { restaurantRepository } from "../repositories/restaurant.repository";
 import { restaurantService } from "../services/restaurant.service";
 import type { Env } from "../types";
 import { success, validationError, serverError } from "../lib/response";
+import { logger } from "../lib/logger";
+import { userRepository } from "../repositories/user.repository";
 
 export const restaurantRoutes = new Hono<Env>();
 
+export const PHONE_REGEX = /^(?:\+91|91)?[6-9]\d{9}$/;
 restaurantRoutes.use("*", ownerAuth);
 
 // GET /restaurant
@@ -20,16 +23,21 @@ restaurantRoutes.get("/", requireRestaurant, async (c) => {
     const restaurant = await restaurantRepository.findById(restaurantId);
     if (!restaurant) return validationError(c, "No restaurant");
 
-    return success(c, {
-      id: restaurantId,
-      name: restaurant.name,
-      phone: restaurant.phone,
-      city: restaurant.city,
-      upiId: restaurant.upiId,
-      serviceMode: restaurant.serviceMode,
-      restaurantCode: restaurant.restaurantCode,
-      tableCount: restaurant._count.tables,
-    }, "Restaurant fetched");
+    return success(
+      c,
+      {
+        id: restaurantId,
+        name: restaurant.name,
+        phone: restaurant.phone,
+        state: restaurant.state,
+        city: restaurant.city,
+        upiId: restaurant.upiId,
+        serviceMode: restaurant.serviceMode,
+        restaurantCode: restaurant.restaurantCode,
+        tableCount: restaurant._count.tables,
+      },
+      "Restaurant fetched",
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return serverError(c, message);
@@ -45,6 +53,7 @@ restaurantRoutes.patch("/", requireRestaurant, async (c) => {
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) data.name = body.name;
     if (body.phone !== undefined) data.phone = body.phone;
+    if (body.state !== undefined) data.state = body.state;
     if (body.city !== undefined) data.city = body.city;
     if (body.upiId !== undefined) data.upiId = body.upiId;
     if (body.serviceMode !== undefined) {
@@ -58,14 +67,19 @@ restaurantRoutes.patch("/", requireRestaurant, async (c) => {
 
     const updated = await restaurantRepository.update(restaurantId, data);
 
-    return success(c, {
-      id: updated.id,
-      name: updated.name,
-      phone: updated.phone,
-      city: updated.city,
-      upiId: updated.upiId,
-      serviceMode: updated.serviceMode,
-    }, "Restaurant updated");
+    return success(
+      c,
+      {
+        id: updated.id,
+        name: updated.name,
+        phone: updated.phone,
+        state: updated.state,
+        city: updated.city,
+        upiId: updated.upiId,
+        serviceMode: updated.serviceMode,
+      },
+      "Restaurant updated",
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return serverError(c, message);
@@ -78,13 +92,26 @@ restaurantRoutes.post("/", async (c) => {
     const userId = c.get(CTX.USER_ID);
     const body = await c.req.json();
 
+    logger.error("create restaurant : ", userId);
+
     if (!body.name || !body.phone) {
       return validationError(c, "Name and phone are required");
+    }
+
+    if (!PHONE_REGEX.test(body.phone)) {
+      return validationError(c, "invalid phone number");
+    }
+    // check user is exist or not
+    const user = await userRepository.findById(userId);
+
+    if (!user) {
+      return validationError(c, "User not found");
     }
 
     const restaurant = await restaurantRepository.create({
       name: body.name,
       phone: body.phone,
+      state: body.state || "",
       city: body.city || "",
       serviceMode: body.serviceMode || SERVICE_MODE.DINE_IN,
       userId,
@@ -97,13 +124,18 @@ restaurantRoutes.post("/", async (c) => {
       restaurantId: restaurant.id,
     });
 
-    return success(c, {
-      id: restaurant.id,
-      name: restaurant.name,
-      token: newToken,
-    }, "Restaurant created");
+    return success(
+      c,
+      {
+        id: restaurant.id,
+        name: restaurant.name,
+        token: newToken,
+      },
+      "Restaurant created",
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    logger.error("OPS Error : ", message);
     return serverError(c, message);
   }
 });
@@ -119,7 +151,11 @@ restaurantRoutes.post("/code", requireRestaurant, async (c) => {
       restaurantCode: code,
     });
 
-    return success(c, { restaurantCode: updated.restaurantCode }, "Restaurant code generated");
+    return success(
+      c,
+      { restaurantCode: updated.restaurantCode },
+      "Restaurant code generated",
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return serverError(c, message);

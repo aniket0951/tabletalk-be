@@ -59,6 +59,10 @@ export async function login(email: string, password: string) {
     throw new AuthError("Invalid credentials", 401);
   }
 
+  if (!user.passwordHash) {
+    throw new AuthError("This account uses Google sign-in", 400);
+  }
+
   const isValid = await compare(password, user.passwordHash);
   if (!isValid) {
     throw new AuthError("Invalid credentials", 401);
@@ -77,6 +81,48 @@ export async function login(email: string, password: string) {
   };
 }
 
+export async function googleLogin(accessToken: string) {
+  if (!accessToken) throw new AuthError("Missing token", 400);
+
+  const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) throw new AuthError("Invalid Google token", 401);
+
+  const data = await res.json() as { email?: string; name?: string; sub?: string };
+  if (!data.email) throw new AuthError("Google account has no email", 400);
+
+  const { email, name, sub: googleId } = data;
+
+  let user = await userRepository.findByEmail(email);
+  if (!user) {
+    user = await userRepository.create({
+      id: `usr_${createId()}`,
+      name: name || email,
+      email,
+      googleId,
+      authProvider: "google",
+    });
+  }
+
+  const restaurant = await prisma.restaurant.findFirst({
+    where: { userId: user.id, isDeleted: false },
+    select: { id: true },
+  });
+
+  const token = await createOwnerToken({
+    userId: user.id,
+    email: user.email,
+    restaurantId: restaurant?.id || null,
+  });
+
+  return {
+    token,
+    user: { id: user.id, name: user.name, email: user.email },
+  };
+}
+
 export async function getMe(userId: string) {
   const user = await userRepository.findById(userId);
   if (!user || user.isDeleted) {
@@ -88,5 +134,6 @@ export async function getMe(userId: string) {
 export const authService = {
   register,
   login,
+  googleLogin,
   getMe,
 };

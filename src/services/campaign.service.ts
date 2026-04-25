@@ -17,13 +17,21 @@ const COST_PER_MESSAGE = 1.38;
 
 export async function createDraft(
   restaurantId: string,
-  data: { type?: string; title: string; message: string; imageUrl?: string; scheduledAt?: string }
+  data: {
+    type?: string;
+    title: string;
+    message: string;
+    imageUrl?: string;
+    scheduledAt?: string;
+  },
 ) {
   if (!data.title?.trim() || !data.message?.trim()) {
     throw new CampaignError("Title and message are required", 400);
   }
 
-  const audienceCount = await prisma.customer.count({ where: { restaurantId } });
+  const audienceCount = await prisma.customer.count({
+    where: { restaurantId },
+  });
   if (audienceCount === 0) {
     throw new CampaignError("No customers to target", 400);
   }
@@ -44,11 +52,15 @@ export async function createDraft(
   });
 }
 
-export async function checkout(campaignId: string, restaurantId: string, email: string) {
+export async function checkout(
+  campaignId: string,
+  restaurantId: string,
+  email: string,
+) {
   const campaign = await campaignRepository.findDeletable(
     campaignId,
     restaurantId,
-    [CAMPAIGN_STATUS.DRAFT, CAMPAIGN_STATUS.PAYING]
+    [CAMPAIGN_STATUS.DRAFT, CAMPAIGN_STATUS.PAYING],
   );
   if (!campaign) {
     throw new CampaignError("Campaign not found or already paid", 404);
@@ -80,15 +92,24 @@ export async function checkout(campaignId: string, restaurantId: string, email: 
 export async function verifyAndSend(
   campaignId: string,
   restaurantId: string,
-  paymentDetails: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }
+  paymentDetails: {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+  },
 ) {
-  const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = paymentDetails;
+  const { razorpay_payment_id, razorpay_order_id, razorpay_signature } =
+    paymentDetails;
 
   if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
     throw new CampaignError("Missing payment details", 400);
   }
 
-  const isValid = verifyOrderPaymentSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
+  const isValid = verifyOrderPaymentSignature(
+    razorpay_order_id,
+    razorpay_payment_id,
+    razorpay_signature,
+  );
   if (!isValid) {
     throw new CampaignError("Invalid payment signature", 400);
   }
@@ -128,7 +149,10 @@ export async function verifyAndSend(
 
   simulateDelivery(campaign.id);
 
-  return { success: true, message: "Payment verified. Campaign is being sent." };
+  return {
+    success: true,
+    message: "Payment verified. Campaign is being sent.",
+  };
 }
 
 export async function simulateDelivery(campaignId: string) {
@@ -157,22 +181,43 @@ export async function simulateDelivery(campaignId: string) {
 
       await prisma.$transaction([
         ...(whatsappIds.length > 0
-          ? [prisma.campaignDelivery.updateMany({
-              where: { id: { in: whatsappIds } },
-              data: { status: DELIVERY_STATUS.DELIVERED, channel: CHANNEL.WHATSAPP, sentAt: now, deliveredAt: now },
-            })]
+          ? [
+              prisma.campaignDelivery.updateMany({
+                where: { id: { in: whatsappIds } },
+                data: {
+                  status: DELIVERY_STATUS.DELIVERED,
+                  channel: CHANNEL.WHATSAPP,
+                  sentAt: now,
+                  deliveredAt: now,
+                },
+              }),
+            ]
           : []),
         ...(smsSuccessIds.length > 0
-          ? [prisma.campaignDelivery.updateMany({
-              where: { id: { in: smsSuccessIds } },
-              data: { status: DELIVERY_STATUS.DELIVERED, channel: CHANNEL.SMS, sentAt: now, deliveredAt: now },
-            })]
+          ? [
+              prisma.campaignDelivery.updateMany({
+                where: { id: { in: smsSuccessIds } },
+                data: {
+                  status: DELIVERY_STATUS.DELIVERED,
+                  channel: CHANNEL.SMS,
+                  sentAt: now,
+                  deliveredAt: now,
+                },
+              }),
+            ]
           : []),
         ...(smsFailIds.length > 0
-          ? [prisma.campaignDelivery.updateMany({
-              where: { id: { in: smsFailIds } },
-              data: { status: DELIVERY_STATUS.FAILED, channel: CHANNEL.SMS, sentAt: now, failReason: "SMS delivery failed" },
-            })]
+          ? [
+              prisma.campaignDelivery.updateMany({
+                where: { id: { in: smsFailIds } },
+                data: {
+                  status: DELIVERY_STATUS.FAILED,
+                  channel: CHANNEL.SMS,
+                  sentAt: now,
+                  failReason: "SMS delivery failed",
+                },
+              }),
+            ]
           : []),
         prisma.campaign.update({
           where: { id: campaignId },

@@ -40,6 +40,6 @@ export function authError(c: Context, message = "Unauthorized") {
 
 export function serverError(c: Context, debug?: string) {
   const body: ErrorResponse = { status_code: 500, message: "Server error", data: null };
-  if (debug) body.debug_message = debug;
+  if (debug && process.env.NODE_ENV !== "production") body.debug_message = debug;
   return c.json(body, 500);
 }

@@ -1,19 +1,20 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
   id           String       @id
   name         String
   email        String
-  passwordHash String
+  passwordHash String?
+  googleId     String?
+  authProvider String       @default("email")
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   isDeleted    Boolean      @default(false)
@@ -24,6 +25,7 @@ model Restaurant {
   id             String           @id @default(cuid())
   name           String
   phone          String
+  state          String           @default("")
   city           String           @default("")
   upiId          String           @default("")
   serviceMode    ServiceMode      @default(DINE_IN)

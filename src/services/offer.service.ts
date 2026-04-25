@@ -2,6 +2,7 @@ import { OFFER_TYPE, DISCOUNT_TYPE } from "../lib/constants";
 
 interface OfferRow {
   id: string;
+  name: string;
   type: string;
   discountType: string;
   discountValue: number;
@@ -155,6 +156,62 @@ export function calculateDiscounts(
   return { appliedDiscounts: applied, totalDiscount: Math.round(totalDiscount * 100) / 100 };
 }
 
+export interface PromoValidationResult {
+  valid: boolean;
+  message?: string;
+  offerId?: string;
+  offerName?: string;
+  discountAmount?: number | null;
+  description?: string;
+}
+
+export function validatePromoCode(
+  offers: OfferRow[],
+  subtotal: number,
+  promoCode: string,
+  now = new Date(),
+): PromoValidationResult {
+  const code = promoCode.trim().toUpperCase();
+
+  const offer = offers.find((o) => o.promoCode?.toUpperCase() === code);
+  if (!offer) return { valid: false, message: "Invalid promo code" };
+
+  if (!offer.active) return { valid: false, message: "This offer is no longer available" };
+
+  if (!isScheduleActive(offer, now)) return { valid: false, message: "This offer is not active right now" };
+
+  if (offer.usageLimit != null && offer.usageCount >= offer.usageLimit) {
+    return { valid: false, message: "This offer is no longer available" };
+  }
+
+  const pct = offer.discountType === DISCOUNT_TYPE.PERCENTAGE;
+
+  if (offer.type === OFFER_TYPE.BILL_DISCOUNT) {
+    if (offer.minOrderAmount != null && subtotal < offer.minOrderAmount) {
+      return { valid: false, message: `Minimum order of ₹${offer.minOrderAmount} required` };
+    }
+    const discountAmount = calcDiscount(offer.discountType, offer.discountValue, subtotal, offer.maxDiscount);
+    return {
+      valid: true,
+      offerId: offer.id,
+      offerName: offer.name,
+      discountAmount,
+      description: pct ? `${offer.discountValue}% off on bill` : `₹${offer.discountValue} off on bill`,
+    };
+  }
+
+  // ITEM_DISCOUNT — can't calculate exact amount without item-level data
+  return {
+    valid: true,
+    offerId: offer.id,
+    offerName: offer.name,
+    discountAmount: null,
+    description: pct
+      ? `${offer.discountValue}% off on qualifying items`
+      : `₹${offer.discountValue} off on qualifying items`,
+  };
+}
+
 export function validateOffer(body: Record<string, unknown>): string | null {
   if (!body.name || typeof body.name !== "string") return "Name is required";
   if (!body.type || !["ITEM_DISCOUNT", "BILL_DISCOUNT"].includes(body.type as string)) return "Invalid offer type";
@@ -173,4 +230,5 @@ export function validateOffer(body: Record<string, unknown>): string | null {
 export const offerService = {
   calculateDiscounts,
   validateOffer,
+  validatePromoCode,
 };
